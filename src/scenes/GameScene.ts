@@ -17,15 +17,15 @@ export class GameScene extends Phaser.Scene {
 
   preload(): void {
     // Polar bear walk-cycle spritesheet: 4 directions x 4 frames, each 64x64.
-    this.load.spritesheet('polar-bear', '/assets/characters/polar-bear.png', {
+    this.load.spritesheet('polar-bear', 'assets/characters/polar-bear.png', {
       frameWidth: 64,
       frameHeight: 64,
     });
 
     // Isometric ground tiles.
-    this.load.image('tile-snow', '/assets/tiles/snow.png');
-    this.load.image('tile-ice', '/assets/tiles/ice.png');
-    this.load.image('tile-ice-cracks', '/assets/tiles/ice-cracks.png');
+    this.load.image('tile-snow', 'assets/tiles/snow.png');
+    this.load.image('tile-ice', 'assets/tiles/ice.png');
+    this.load.image('tile-ice-cracks', 'assets/tiles/ice-cracks.png');
   }
 
   create(): void {
