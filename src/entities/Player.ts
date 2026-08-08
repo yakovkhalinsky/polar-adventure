@@ -4,7 +4,6 @@ export type Direction = 'up' | 'down' | 'left' | 'right';
 
 export class Player extends Phaser.Physics.Arcade.Sprite {
   private speed = 180;
-  private facing: Direction = 'down';
 
   constructor(scene: Phaser.Scene, x: number, y: number, texture: string) {
     super(scene, x, y, texture);
@@ -22,18 +21,14 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
     if (cursors.left?.isDown || wasd.left.isDown) {
       velocityX = -this.speed;
-      this.facing = 'left';
     } else if (cursors.right?.isDown || wasd.right.isDown) {
       velocityX = this.speed;
-      this.facing = 'right';
     }
 
     if (cursors.up?.isDown || wasd.up.isDown) {
       velocityY = -this.speed;
-      this.facing = 'up';
     } else if (cursors.down?.isDown || wasd.down.isDown) {
       velocityY = this.speed;
-      this.facing = 'down';
     }
 
     this.setVelocity(velocityX, velocityY);
