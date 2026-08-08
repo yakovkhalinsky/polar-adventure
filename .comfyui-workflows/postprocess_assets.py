@@ -15,36 +15,45 @@ TILE_WIDTH = 64
 TILE_HEIGHT = 32
 SPRITE_SIZE = 64
 
-# Color used as transparent background in ComfyUI workflow.
-KEY_COLOR = (255, 0, 255)
-
 DIRECTION_ORDER = ["north", "east", "south", "west"]
 TILES = ["snow", "ice", "ice_cracks"]
 
 
-def remove_background(img: Image.Image, tolerance: int = 45) -> Image.Image:
-    """Remove the uniform background by sampling corners and color-keying."""
-    img = img.convert("RGBA")
+def detect_background_color(img: Image.Image) -> tuple[int, int, int]:
+    """Sample border points to estimate the solid generated background color."""
     width, height = img.size
-
-    # Estimate background color from the four corners (offset a few pixels in).
-    corners = [
-        img.getpixel((5, 5)),
-        img.getpixel((width - 6, 5)),
-        img.getpixel((5, height - 6)),
-        img.getpixel((width - 6, height - 6)),
+    samples = []
+    border = max(width, height) // 12
+    points = [
+        (border, border),
+        (width - border - 1, border),
+        (border, height - border - 1),
+        (width - border - 1, height - border - 1),
+        (width // 2, border),
+        (width // 2, height - border - 1),
+        (border, height // 2),
+        (width - border - 1, height // 2),
     ]
-    bg_r = sum(c[0] for c in corners) // 4
-    bg_g = sum(c[1] for c in corners) // 4
-    bg_b = sum(c[2] for c in corners) // 4
+    rgb = img.convert("RGB")
+    for x, y in points:
+        samples.append(rgb.getpixel((x, y)))
+
+    samples.sort()
+    return samples[len(samples) // 2]
+
+
+def remove_background(img: Image.Image, tolerance: int = 55) -> Image.Image:
+    """Remove the uniform generated background by color keying, producing a clean alpha channel."""
+    img = img.convert("RGBA")
+    bg = detect_background_color(img)
 
     pixels = list(img.getdata())
     new_pixels = []
     for r, g, b, a in pixels:
         if (
-            abs(r - bg_r) <= tolerance
-            and abs(g - bg_g) <= tolerance
-            and abs(b - bg_b) <= tolerance
+            abs(r - bg[0]) <= tolerance
+            and abs(g - bg[1]) <= tolerance
+            and abs(b - bg[2]) <= tolerance
         ):
             new_pixels.append((r, g, b, 0))
         else:
@@ -53,25 +62,54 @@ def remove_background(img: Image.Image, tolerance: int = 45) -> Image.Image:
     return img
 
 
-def make_isometric_tile(img: Image.Image, name: str) -> Image.Image:
-    """Crop a 64x32 diamond from the center of a square texture."""
-    size = max(TILE_WIDTH, TILE_HEIGHT * 2)
-    img = img.convert("RGBA")
-    # Resize source to a square that covers the diamond footprint.
-    src = img.resize((size, size), Image.Resampling.LANCZOS)
+def make_isometric_tile(img: Image.Image) -> Image.Image:
+    """Crop a 64x32 diamond from the center of a square texture.
+
+    The generated textures are 256x256 square images with the isometric tile
+    centered. We take the flat top diamond of the tile, ignoring the 3D sides.
+    """
+    src_size = 256
+    img = img.convert("RGBA").resize((src_size, src_size), Image.Resampling.LANCZOS)
 
     tile = Image.new("RGBA", (TILE_WIDTH, TILE_HEIGHT), (0, 0, 0, 0))
-    # Diamond mask: pixels inside the isometric diamond are opaque.
+    cx = src_size / 2
+    cy = src_size / 2
+    # The generated tile top face spans roughly from left edge to right edge.
+    # Diamond half-width in source space ~ src_size/2, half-height ~ src_size/4.
+    half_w = src_size / 2 - 1  # 127
+    half_h = src_size / 4 - 1  # 63
+
     for y in range(TILE_HEIGHT):
         for x in range(TILE_WIDTH):
-            # Normalized coordinates: center is (0,0), x in [-1,1], y in [-1,1]
+            # Normalize to [-1, 1] inside the target diamond.
             nx = (x / (TILE_WIDTH - 1)) * 2 - 1
             ny = (y / (TILE_HEIGHT - 1)) * 2 - 1
             if abs(nx) + abs(ny) <= 1.0:
-                # Map diamond point back to source square coordinates.
-                sx = int(((nx + 1) / 2) * (size - 1))
-                sy = int(((ny + 1) / 2) * (size - 1))
-                tile.putpixel((x, y), src.getpixel((sx, sy)))
+                sx = int(cx + nx * half_w)
+                sy = int(cy + ny * half_h)
+                tile.putpixel((x, y), img.getpixel((sx, sy)))
+    return tile
+
+
+def make_isometric_tile_masked(img: Image.Image) -> Image.Image:
+    """Create a tile by first removing the background, then applying a diamond mask."""
+    img = remove_background(img, tolerance=55)
+    img = img.resize((TILE_WIDTH * 4, TILE_HEIGHT * 4), Image.Resampling.LANCZOS)
+
+    tile = Image.new("RGBA", (TILE_WIDTH, TILE_HEIGHT), (0, 0, 0, 0))
+    cx = img.width // 2
+    cy = img.height // 2
+    half_w = img.width // 2 - 1
+    half_h = img.height // 2 - 1
+
+    for y in range(TILE_HEIGHT):
+        for x in range(TILE_WIDTH):
+            nx = (x / (TILE_WIDTH - 1)) * 2 - 1
+            ny = (y / (TILE_HEIGHT - 1)) * 2 - 1
+            if abs(nx) + abs(ny) <= 1.0:
+                sx = int(cx + nx * half_w)
+                sy = int(cy + ny * half_h)
+                tile.putpixel((x, y), img.getpixel((sx, sy)))
     return tile
 
 
@@ -81,7 +119,7 @@ def build_polar_bear_spritesheet() -> Image.Image:
     for direction in DIRECTION_ORDER:
         path = SRC / f"polar_bear_{direction}_00001_.png"
         img = Image.open(path)
-        img = remove_background(img)
+        img = remove_background(img, tolerance=60)
         # Scale to fit sprite cell while preserving aspect ratio.
         img.thumbnail((SPRITE_SIZE, SPRITE_SIZE), Image.Resampling.LANCZOS)
         # Center on a 64x64 transparent canvas.
@@ -107,8 +145,7 @@ def build_tiles() -> dict[str, Image.Image]:
     for name in TILES:
         path = SRC / f"tile_{name}_00001_.png"
         img = Image.open(path)
-        img = remove_background(img)
-        tile = make_isometric_tile(img, name)
+        tile = make_isometric_tile_masked(img)
         tiles[name] = tile
     return tiles
 
