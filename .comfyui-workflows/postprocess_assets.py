@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
 """
 Post-process ComfyUI outputs into game-ready Phaser assets.
+
+Expects square source images with a uniform background color
+(lime green from the v2 workflow, or any solid color from older runs).
+Produces:
+  - public/assets/characters/polar-bear.png  (256x256 spritesheet)
+  - public/assets/tiles/{snow,ice,ice-cracks}.png  (64x32 diamond tiles)
 """
 import json
 from pathlib import Path
@@ -20,9 +26,8 @@ TILES = ["snow", "ice", "ice_cracks"]
 
 
 def detect_background_color(img: Image.Image) -> tuple[int, int, int]:
-    """Sample border points to estimate the solid generated background color."""
+    """Estimate the solid generated background color from border samples."""
     width, height = img.size
-    samples = []
     border = max(width, height) // 12
     points = [
         (border, border),
@@ -35,15 +40,13 @@ def detect_background_color(img: Image.Image) -> tuple[int, int, int]:
         (width - border - 1, height // 2),
     ]
     rgb = img.convert("RGB")
-    for x, y in points:
-        samples.append(rgb.getpixel((x, y)))
-
+    samples = [rgb.getpixel((x, y)) for x, y in points]
     samples.sort()
     return samples[len(samples) // 2]
 
 
 def remove_background(img: Image.Image, tolerance: int = 55) -> Image.Image:
-    """Remove the uniform generated background by color keying, producing a clean alpha channel."""
+    """Color-key out the uniform generated background and force foreground alpha to 255."""
     img = img.convert("RGBA")
     bg = detect_background_color(img)
 
@@ -63,10 +66,10 @@ def remove_background(img: Image.Image, tolerance: int = 55) -> Image.Image:
 
 
 def make_isometric_tile(img: Image.Image) -> Image.Image:
-    """Crop a 64x32 diamond from the center of a square texture.
+    """Create a 64x32 diamond tile from a square source texture.
 
-    The generated textures are 256x256 square images with the isometric tile
-    centered. We take the flat top diamond of the tile, ignoring the 3D sides.
+    The source image should contain a flat isometric floor tile centered in
+    the frame. Background must already be transparent.
     """
     src_size = 256
     img = img.convert("RGBA").resize((src_size, src_size), Image.Resampling.LANCZOS)
@@ -74,33 +77,8 @@ def make_isometric_tile(img: Image.Image) -> Image.Image:
     tile = Image.new("RGBA", (TILE_WIDTH, TILE_HEIGHT), (0, 0, 0, 0))
     cx = src_size / 2
     cy = src_size / 2
-    # The generated tile top face spans roughly from left edge to right edge.
-    # Diamond half-width in source space ~ src_size/2, half-height ~ src_size/4.
-    half_w = src_size / 2 - 1  # 127
-    half_h = src_size / 4 - 1  # 63
-
-    for y in range(TILE_HEIGHT):
-        for x in range(TILE_WIDTH):
-            # Normalize to [-1, 1] inside the target diamond.
-            nx = (x / (TILE_WIDTH - 1)) * 2 - 1
-            ny = (y / (TILE_HEIGHT - 1)) * 2 - 1
-            if abs(nx) + abs(ny) <= 1.0:
-                sx = int(cx + nx * half_w)
-                sy = int(cy + ny * half_h)
-                tile.putpixel((x, y), img.getpixel((sx, sy)))
-    return tile
-
-
-def make_isometric_tile_masked(img: Image.Image) -> Image.Image:
-    """Create a tile by first removing the background, then applying a diamond mask."""
-    img = remove_background(img, tolerance=55)
-    img = img.resize((TILE_WIDTH * 4, TILE_HEIGHT * 4), Image.Resampling.LANCZOS)
-
-    tile = Image.new("RGBA", (TILE_WIDTH, TILE_HEIGHT), (0, 0, 0, 0))
-    cx = img.width // 2
-    cy = img.height // 2
-    half_w = img.width // 2 - 1
-    half_h = img.height // 2 - 1
+    half_w = src_size / 2 - 1
+    half_h = src_size / 4 - 1
 
     for y in range(TILE_HEIGHT):
         for x in range(TILE_WIDTH):
@@ -117,17 +95,19 @@ def build_polar_bear_spritesheet() -> Image.Image:
     """Assemble a 4x4 spritesheet: 4 directions x 4 duplicate walk frames."""
     frames = []
     for direction in DIRECTION_ORDER:
-        path = SRC / f"polar_bear_{direction}_00001_.png"
+        path = sorted(SRC.glob(f"polar_bear_{direction}_*.png"))[-1]
+        if not path.exists():
+            raise FileNotFoundError(f"Missing source image: {path}")
+
         img = Image.open(path)
         img = remove_background(img, tolerance=60)
-        # Scale to fit sprite cell while preserving aspect ratio.
         img.thumbnail((SPRITE_SIZE, SPRITE_SIZE), Image.Resampling.LANCZOS)
-        # Center on a 64x64 transparent canvas.
+
         canvas = Image.new("RGBA", (SPRITE_SIZE, SPRITE_SIZE), (0, 0, 0, 0))
         cx = (SPRITE_SIZE - img.width) // 2
         cy = (SPRITE_SIZE - img.height) // 2
         canvas.paste(img, (cx, cy), img)
-        # Duplicate 4 times for a simple walk cycle.
+
         for _ in range(4):
             frames.append(canvas.copy())
 
@@ -143,9 +123,15 @@ def build_tiles() -> dict[str, Image.Image]:
     """Generate diamond isometric tiles from square textures."""
     tiles = {}
     for name in TILES:
-        path = SRC / f"tile_{name}_00001_.png"
+        path = sorted(SRC.glob(f"tile_{name}_*.png"))[-1]
+        if not path.exists():
+            raise FileNotFoundError(f"Missing source image: {path}")
+
         img = Image.open(path)
-        tile = make_isometric_tile_masked(img)
+        img = remove_background(img, tolerance=55)
+        # Scale up a little before diamond extraction to preserve texture detail.
+        img = img.resize((TILE_WIDTH * 4, TILE_HEIGHT * 4), Image.Resampling.LANCZOS)
+        tile = make_isometric_tile(img)
         tiles[name] = tile
     return tiles
 

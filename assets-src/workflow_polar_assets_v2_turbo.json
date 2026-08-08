@@ -1,0 +1,615 @@
+{
+  "1": {
+    "inputs": {
+      "clip_name": "qwen_3_4b.safetensors",
+      "type": "lumina2",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader"
+  },
+  "2": {
+    "inputs": {
+      "vae_name": "ae.safetensors"
+    },
+    "class_type": "VAELoader"
+  },
+  "3": {
+    "inputs": {
+      "unet_name": "z_image_turbo_bf16.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader"
+  },
+  "4": {
+    "inputs": {
+      "shift": 3,
+      "model": [
+        "3",
+        0
+      ]
+    },
+    "class_type": "ModelSamplingAuraFlow"
+  },
+  "5": {
+    "inputs": {
+      "width": 1024,
+      "height": 1024,
+      "batch_size": 1
+    },
+    "class_type": "EmptySD3LatentImage"
+  },
+  "10": {
+    "inputs": {
+      "text": "cute polar bear character, chibi proportions, back view, facing away from camera, full body visible, standing pose, white fluffy fur, small black eyes and nose, game sprite, clean vector-like style, soft shading, solid bright lime green background #00ff00, centered, high quality",
+      "clip": [
+        "1",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "11": {
+    "inputs": {
+      "conditioning": [
+        "10",
+        0
+      ]
+    },
+    "class_type": "ConditioningZeroOut"
+  },
+  "12": {
+    "inputs": {
+      "seed": 0,
+      "steps": 8,
+      "cfg": 1.0,
+      "sampler_name": "res_multistep",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "4",
+        0
+      ],
+      "positive": [
+        "10",
+        0
+      ],
+      "negative": [
+        "11",
+        0
+      ],
+      "latent_image": [
+        "5",
+        0
+      ]
+    },
+    "class_type": "KSampler"
+  },
+  "13": {
+    "inputs": {
+      "samples": [
+        "12",
+        0
+      ],
+      "vae": [
+        "2",
+        0
+      ]
+    },
+    "class_type": "VAEDecode"
+  },
+  "14": {
+    "inputs": {
+      "image": [
+        "13",
+        0
+      ],
+      "upscale_method": "lanczos",
+      "width": 512,
+      "height": 512,
+      "crop": "center"
+    },
+    "class_type": "ImageScale"
+  },
+  "15": {
+    "inputs": {
+      "filename_prefix": "polar_bear_north",
+      "images": [
+        "14",
+        0
+      ]
+    },
+    "class_type": "SaveImage"
+  },
+  "20": {
+    "inputs": {
+      "text": "cute polar bear character, chibi proportions, right side view, facing right, full body visible, standing pose, white fluffy fur, small black eyes and nose, game sprite, clean vector-like style, soft shading, solid bright lime green background #00ff00, centered, high quality",
+      "clip": [
+        "1",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "21": {
+    "inputs": {
+      "conditioning": [
+        "20",
+        0
+      ]
+    },
+    "class_type": "ConditioningZeroOut"
+  },
+  "22": {
+    "inputs": {
+      "seed": 0,
+      "steps": 8,
+      "cfg": 1.0,
+      "sampler_name": "res_multistep",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "4",
+        0
+      ],
+      "positive": [
+        "20",
+        0
+      ],
+      "negative": [
+        "21",
+        0
+      ],
+      "latent_image": [
+        "5",
+        0
+      ]
+    },
+    "class_type": "KSampler"
+  },
+  "23": {
+    "inputs": {
+      "samples": [
+        "22",
+        0
+      ],
+      "vae": [
+        "2",
+        0
+      ]
+    },
+    "class_type": "VAEDecode"
+  },
+  "24": {
+    "inputs": {
+      "image": [
+        "23",
+        0
+      ],
+      "upscale_method": "lanczos",
+      "width": 512,
+      "height": 512,
+      "crop": "center"
+    },
+    "class_type": "ImageScale"
+  },
+  "25": {
+    "inputs": {
+      "filename_prefix": "polar_bear_east",
+      "images": [
+        "24",
+        0
+      ]
+    },
+    "class_type": "SaveImage"
+  },
+  "30": {
+    "inputs": {
+      "text": "cute polar bear character, chibi proportions, front view, facing toward camera, full body visible, standing pose, white fluffy fur, small black eyes and nose, game sprite, clean vector-like style, soft shading, solid bright lime green background #00ff00, centered, high quality",
+      "clip": [
+        "1",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "31": {
+    "inputs": {
+      "conditioning": [
+        "30",
+        0
+      ]
+    },
+    "class_type": "ConditioningZeroOut"
+  },
+  "32": {
+    "inputs": {
+      "seed": 0,
+      "steps": 8,
+      "cfg": 1.0,
+      "sampler_name": "res_multistep",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "4",
+        0
+      ],
+      "positive": [
+        "30",
+        0
+      ],
+      "negative": [
+        "31",
+        0
+      ],
+      "latent_image": [
+        "5",
+        0
+      ]
+    },
+    "class_type": "KSampler"
+  },
+  "33": {
+    "inputs": {
+      "samples": [
+        "32",
+        0
+      ],
+      "vae": [
+        "2",
+        0
+      ]
+    },
+    "class_type": "VAEDecode"
+  },
+  "34": {
+    "inputs": {
+      "image": [
+        "33",
+        0
+      ],
+      "upscale_method": "lanczos",
+      "width": 512,
+      "height": 512,
+      "crop": "center"
+    },
+    "class_type": "ImageScale"
+  },
+  "35": {
+    "inputs": {
+      "filename_prefix": "polar_bear_south",
+      "images": [
+        "34",
+        0
+      ]
+    },
+    "class_type": "SaveImage"
+  },
+  "40": {
+    "inputs": {
+      "text": "cute polar bear character, chibi proportions, left side view, facing left, full body visible, standing pose, white fluffy fur, small black eyes and nose, game sprite, clean vector-like style, soft shading, solid bright lime green background #00ff00, centered, high quality",
+      "clip": [
+        "1",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "41": {
+    "inputs": {
+      "conditioning": [
+        "40",
+        0
+      ]
+    },
+    "class_type": "ConditioningZeroOut"
+  },
+  "42": {
+    "inputs": {
+      "seed": 0,
+      "steps": 8,
+      "cfg": 1.0,
+      "sampler_name": "res_multistep",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "4",
+        0
+      ],
+      "positive": [
+        "40",
+        0
+      ],
+      "negative": [
+        "41",
+        0
+      ],
+      "latent_image": [
+        "5",
+        0
+      ]
+    },
+    "class_type": "KSampler"
+  },
+  "43": {
+    "inputs": {
+      "samples": [
+        "42",
+        0
+      ],
+      "vae": [
+        "2",
+        0
+      ]
+    },
+    "class_type": "VAEDecode"
+  },
+  "44": {
+    "inputs": {
+      "image": [
+        "43",
+        0
+      ],
+      "upscale_method": "lanczos",
+      "width": 512,
+      "height": 512,
+      "crop": "center"
+    },
+    "class_type": "ImageScale"
+  },
+  "45": {
+    "inputs": {
+      "filename_prefix": "polar_bear_west",
+      "images": [
+        "44",
+        0
+      ]
+    },
+    "class_type": "SaveImage"
+  },
+  "50": {
+    "inputs": {
+      "text": "flat isometric floor tile texture, fresh powder snow, subtle sparkles, soft drifts, game asset, top-down view, no 3D sides, no thickness, soft ambient lighting, clean diamond edges, centered, solid bright lime green background #00ff00, high quality",
+      "clip": [
+        "1",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "51": {
+    "inputs": {
+      "conditioning": [
+        "50",
+        0
+      ]
+    },
+    "class_type": "ConditioningZeroOut"
+  },
+  "52": {
+    "inputs": {
+      "seed": 0,
+      "steps": 8,
+      "cfg": 1.0,
+      "sampler_name": "res_multistep",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "4",
+        0
+      ],
+      "positive": [
+        "50",
+        0
+      ],
+      "negative": [
+        "51",
+        0
+      ],
+      "latent_image": [
+        "5",
+        0
+      ]
+    },
+    "class_type": "KSampler"
+  },
+  "53": {
+    "inputs": {
+      "samples": [
+        "52",
+        0
+      ],
+      "vae": [
+        "2",
+        0
+      ]
+    },
+    "class_type": "VAEDecode"
+  },
+  "54": {
+    "inputs": {
+      "image": [
+        "53",
+        0
+      ],
+      "upscale_method": "lanczos",
+      "width": 512,
+      "height": 512,
+      "crop": "center"
+    },
+    "class_type": "ImageScale"
+  },
+  "55": {
+    "inputs": {
+      "filename_prefix": "tile_snow",
+      "images": [
+        "54",
+        0
+      ]
+    },
+    "class_type": "SaveImage"
+  },
+  "60": {
+    "inputs": {
+      "text": "flat isometric floor tile texture, smooth frozen lake ice, pale blue, glossy highlights, game asset, top-down view, no 3D sides, no thickness, soft ambient lighting, clean diamond edges, centered, solid bright lime green background #00ff00, high quality",
+      "clip": [
+        "1",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "61": {
+    "inputs": {
+      "conditioning": [
+        "60",
+        0
+      ]
+    },
+    "class_type": "ConditioningZeroOut"
+  },
+  "62": {
+    "inputs": {
+      "seed": 0,
+      "steps": 8,
+      "cfg": 1.0,
+      "sampler_name": "res_multistep",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "4",
+        0
+      ],
+      "positive": [
+        "60",
+        0
+      ],
+      "negative": [
+        "61",
+        0
+      ],
+      "latent_image": [
+        "5",
+        0
+      ]
+    },
+    "class_type": "KSampler"
+  },
+  "63": {
+    "inputs": {
+      "samples": [
+        "62",
+        0
+      ],
+      "vae": [
+        "2",
+        0
+      ]
+    },
+    "class_type": "VAEDecode"
+  },
+  "64": {
+    "inputs": {
+      "image": [
+        "63",
+        0
+      ],
+      "upscale_method": "lanczos",
+      "width": 512,
+      "height": 512,
+      "crop": "center"
+    },
+    "class_type": "ImageScale"
+  },
+  "65": {
+    "inputs": {
+      "filename_prefix": "tile_ice",
+      "images": [
+        "64",
+        0
+      ]
+    },
+    "class_type": "SaveImage"
+  },
+  "70": {
+    "inputs": {
+      "text": "flat isometric floor tile texture, frozen lake ice with dark cracks, pale blue and white, game asset, top-down view, no 3D sides, no thickness, soft ambient lighting, clean diamond edges, centered, solid bright lime green background #00ff00, high quality",
+      "clip": [
+        "1",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "71": {
+    "inputs": {
+      "conditioning": [
+        "70",
+        0
+      ]
+    },
+    "class_type": "ConditioningZeroOut"
+  },
+  "72": {
+    "inputs": {
+      "seed": 0,
+      "steps": 8,
+      "cfg": 1.0,
+      "sampler_name": "res_multistep",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "4",
+        0
+      ],
+      "positive": [
+        "70",
+        0
+      ],
+      "negative": [
+        "71",
+        0
+      ],
+      "latent_image": [
+        "5",
+        0
+      ]
+    },
+    "class_type": "KSampler"
+  },
+  "73": {
+    "inputs": {
+      "samples": [
+        "72",
+        0
+      ],
+      "vae": [
+        "2",
+        0
+      ]
+    },
+    "class_type": "VAEDecode"
+  },
+  "74": {
+    "inputs": {
+      "image": [
+        "73",
+        0
+      ],
+      "upscale_method": "lanczos",
+      "width": 512,
+      "height": 512,
+      "crop": "center"
+    },
+    "class_type": "ImageScale"
+  },
+  "75": {
+    "inputs": {
+      "filename_prefix": "tile_ice_cracks",
+      "images": [
+        "74",
+        0
+      ]
+    },
+    "class_type": "SaveImage"
+  }
+}
