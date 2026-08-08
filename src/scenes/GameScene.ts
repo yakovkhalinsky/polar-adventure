@@ -10,19 +10,18 @@ export class GameScene extends Phaser.Scene {
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private wasd!: Record<Direction, Phaser.Input.Keyboard.Key>;
   private tileGroup!: Phaser.GameObjects.Group;
+  private worldBounds!: Phaser.Geom.Rectangle;
 
   constructor() {
     super({ key: 'GameScene' });
   }
 
   preload(): void {
-    // Polar bear walk-cycle spritesheet: 4 directions x 4 frames, each 64x64.
     this.load.spritesheet('polar-bear', 'assets/characters/polar-bear.png', {
       frameWidth: 64,
       frameHeight: 64,
     });
 
-    // Isometric ground tiles.
     this.load.image('tile-snow', 'assets/tiles/snow.png');
     this.load.image('tile-ice', 'assets/tiles/ice.png');
     this.load.image('tile-ice-cracks', 'assets/tiles/ice-cracks.png');
@@ -34,7 +33,6 @@ export class GameScene extends Phaser.Scene {
 
     this.drawIsometricGrid();
 
-    // Spawn the player directly on the center tile of the grid.
     const startIso = this.cartesianToIsometric(0, 0);
     this.player = new Player(this, startIso.x, startIso.y);
 
@@ -46,17 +44,14 @@ export class GameScene extends Phaser.Scene {
       right: Phaser.Input.Keyboard.KeyCodes.D,
     }) as Record<Direction, Phaser.Input.Keyboard.Key>;
 
-    // Center the camera on the player so the map feels centered on screen.
-    this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
-    this.cameras.main.setZoom(1);
+    // Set up the camera so the map is centered and the player can roam it.
+    this.configureCamera();
   }
 
   update(): void {
     this.player.update(this.cursors, this.wasd);
 
-    // Depth-sort every game object by its feet/base Y position so that
-    // characters naturally walk behind tiles that are "in front" of them
-    // and in front of tiles that are "behind" them.
+    // Depth-sort tiles each frame so the bear walks behind/in-front correctly.
     this.tileGroup.getChildren().forEach((child) => {
       const tile = child as Phaser.GameObjects.Image;
       tile.setDepth(tile.y);
@@ -67,20 +62,58 @@ export class GameScene extends Phaser.Scene {
     const centerX = this.cameras.main.width / 2;
     const centerY = this.cameras.main.height / 2;
 
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+
     for (let row = 0; row < GRID_SIZE; row++) {
       for (let col = 0; col < GRID_SIZE; col++) {
         const { x, y } = this.cartesianToIsometric(col - GRID_SIZE / 2, row - GRID_SIZE / 2);
         const tileX = centerX + x;
         const tileY = centerY + y;
 
-        // Pick a tile texture based on a simple pattern.
         const key = this.pickTileTexture(row, col);
         const tile = this.add.image(tileX, tileY, key);
         tile.setOrigin(0.5, 0.5);
         tile.setDepth(tileY);
         this.tileGroup.add(tile);
+
+        minX = Math.min(minX, tileX - TILE_WIDTH / 2);
+        minY = Math.min(minY, tileY - TILE_HEIGHT / 2);
+        maxX = Math.max(maxX, tileX + TILE_WIDTH / 2);
+        maxY = Math.max(maxY, tileY + TILE_HEIGHT / 2);
       }
     }
+
+    // Pad bounds to keep tiles fully in view.
+    const padding = 64;
+    this.worldBounds = new Phaser.Geom.Rectangle(
+      minX - padding,
+      minY - padding,
+      maxX - minX + padding * 2,
+      maxY - minY + padding * 2,
+    );
+  }
+
+  private configureCamera(): void {
+    const cam = this.cameras.main;
+
+    // Fit the whole grid into view at start.
+    const zoomX = cam.width / this.worldBounds.width;
+    const zoomY = cam.height / this.worldBounds.height;
+    const fitZoom = Math.min(zoomX, zoomY) * 0.9; // 10% margin
+    const zoom = Phaser.Math.Clamp(fitZoom, 0.5, 1.25);
+
+    cam.setZoom(zoom);
+    cam.centerOn(this.worldBounds.centerX, this.worldBounds.centerY);
+    cam.setBounds(this.worldBounds.x, this.worldBounds.y, this.worldBounds.width, this.worldBounds.height);
+
+    // Follow the player with a small deadzone so the map stays centered
+    // until the player gets close to the edge.
+    cam.startFollow(this.player, true, 0.08, 0.08);
+    cam.setFollowOffset(0, -32); // account for player height
+    cam.setDeadzone(cam.width * 0.2, cam.height * 0.2);
   }
 
   private pickTileTexture(row: number, col: number): string {
