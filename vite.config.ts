@@ -8,6 +8,7 @@ export default defineConfig({
     outDir: 'dist',
     emptyOutDir: true,
     sourcemap: true,
+    chunkSizeWarningLimit: 1600,
     rollupOptions: {
       input: {
         main: resolve(__dirname, 'index.html'),
