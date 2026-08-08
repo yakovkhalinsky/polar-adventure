@@ -16,25 +16,16 @@ export class GameScene extends Phaser.Scene {
   }
 
   preload(): void {
-    // Create a runtime texture from an inline SVG so the project has zero external asset dependencies.
-    const svg = `
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
-        <rect width="64" height="64" fill="#8ecae6" opacity="0"/>
-        <ellipse cx="32" cy="34" rx="18" ry="14" fill="#f8fbff"/>
-        <circle cx="32" cy="24" r="12" fill="#f8fbff"/>
-        <circle cx="28" cy="22" r="1.5" fill="#1a2b3c"/>
-        <circle cx="36" cy="22" r="1.5" fill="#1a2b3c"/>
-        <ellipse cx="32" cy="27" rx="3" ry="2" fill="#1a2b3c"/>
-        <ellipse cx="18" cy="34" rx="5" ry="8" fill="#f8fbff" transform="rotate(-20 18 34)"/>
-        <ellipse cx="46" cy="34" rx="5" ry="8" fill="#f8fbff" transform="rotate(20 46 34)"/>
-        <ellipse cx="24" cy="46" rx="4" ry="7" fill="#f8fbff" transform="rotate(-10 24 46)"/>
-        <ellipse cx="40" cy="46" rx="4" ry="7" fill="#f8fbff" transform="rotate(10 40 46)"/>
-        <circle cx="16" cy="20" r="5" fill="#f8fbff"/>
-        <circle cx="48" cy="20" r="5" fill="#f8fbff"/>
-      </svg>
-    `;
-    const url = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
-    this.load.svg('polar-bear', url, { width: 64, height: 64 });
+    // Polar bear walk-cycle spritesheet: 4 directions x 4 frames, each 64x64.
+    this.load.spritesheet('polar-bear', '/assets/characters/polar-bear.png', {
+      frameWidth: 64,
+      frameHeight: 64,
+    });
+
+    // Isometric ground tiles.
+    this.load.image('tile-snow', '/assets/tiles/snow.png');
+    this.load.image('tile-ice', '/assets/tiles/ice.png');
+    this.load.image('tile-ice-cracks', '/assets/tiles/ice-cracks.png');
   }
 
   create(): void {
@@ -44,8 +35,8 @@ export class GameScene extends Phaser.Scene {
     this.drawIsometricGrid();
 
     const startIso = this.cartesianToIsometric(0, 0);
-    this.player = new Player(this, startIso.x, startIso.y - TILE_HEIGHT * 2, 'polar-bear');
-    this.player.setScale(0.8);
+    this.player = new Player(this, startIso.x, startIso.y - TILE_HEIGHT * 2);
+    this.player.setScale(0.9);
 
     this.cursors = this.input.keyboard!.createCursorKeys();
     this.wasd = this.input.keyboard!.addKeys({
@@ -61,7 +52,7 @@ export class GameScene extends Phaser.Scene {
 
     // Keep tiles depth-sorted relative to the player so walking behind/in-front works.
     this.tileGroup.getChildren().forEach((child) => {
-      const tile = child as Phaser.GameObjects.Rectangle;
+      const tile = child as Phaser.GameObjects.Image;
       tile.setDepth(tile.y);
     });
   }
@@ -76,14 +67,21 @@ export class GameScene extends Phaser.Scene {
         const tileX = centerX + x;
         const tileY = offsetY + y;
 
-        const color = (row + col) % 2 === 0 ? 0xa8dadc : 0x457b9d;
-        const tile = this.add.rectangle(tileX, tileY, TILE_WIDTH, TILE_HEIGHT, color);
-        tile.setStrokeStyle(1, 0x1d3557);
+        // Pick a tile texture based on a simple pattern.
+        const key = this.pickTileTexture(row, col);
+        const tile = this.add.image(tileX, tileY, key);
         tile.setOrigin(0.5, 0.5);
         tile.setDepth(tileY);
         this.tileGroup.add(tile);
       }
     }
+  }
+
+  private pickTileTexture(row: number, col: number): string {
+    const n = (row * 3 + col * 7) % 10;
+    if (n === 0) return 'tile-ice-cracks';
+    if (n < 4) return 'tile-ice';
+    return 'tile-snow';
   }
 
   private cartesianToIsometric(cartX: number, cartY: number): { x: number; y: number } {

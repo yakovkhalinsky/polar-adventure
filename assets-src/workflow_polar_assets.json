@@ -1,0 +1,839 @@
+{
+  "1": {
+    "inputs": {
+      "clip_name": "qwen_3_4b.safetensors",
+      "type": "lumina2",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader"
+  },
+  "2": {
+    "inputs": {
+      "vae_name": "ae.safetensors"
+    },
+    "class_type": "VAELoader"
+  },
+  "3": {
+    "inputs": {
+      "unet_name": "z_image_turbo_bf16.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader"
+  },
+  "4": {
+    "inputs": {
+      "shift": 3,
+      "model": [
+        "3",
+        0
+      ]
+    },
+    "class_type": "ModelSamplingAuraFlow"
+  },
+  "5": {
+    "inputs": {
+      "width": 1024,
+      "height": 1024,
+      "batch_size": 1
+    },
+    "class_type": "EmptySD3LatentImage"
+  },
+  "10": {
+    "inputs": {
+      "text": "cute polar bear standing, facing away from camera, north view, isometric game asset, simple low-poly style, clean outlines, solid magenta background #ff00ff, centered, full body visible, arctic white fur, soft shadows, high quality",
+      "clip": [
+        "1",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "11": {
+    "inputs": {
+      "conditioning": [
+        "10",
+        0
+      ]
+    },
+    "class_type": "ConditioningZeroOut"
+  },
+  "12": {
+    "inputs": {
+      "seed": 0,
+      "steps": 8,
+      "cfg": 1,
+      "sampler_name": "res_multistep",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "4",
+        0
+      ],
+      "positive": [
+        "10",
+        0
+      ],
+      "negative": [
+        "11",
+        0
+      ],
+      "latent_image": [
+        "5",
+        0
+      ]
+    },
+    "class_type": "KSampler"
+  },
+  "13": {
+    "inputs": {
+      "samples": [
+        "12",
+        0
+      ],
+      "vae": [
+        "2",
+        0
+      ]
+    },
+    "class_type": "VAEDecode"
+  },
+  "14": {
+    "inputs": {
+      "image": [
+        "13",
+        0
+      ],
+      "upscale_method": "lanczos",
+      "width": 256,
+      "height": 256,
+      "crop": "center"
+    },
+    "class_type": "ImageScale"
+  },
+  "15": {
+    "inputs": {
+      "image": [
+        "14",
+        0
+      ],
+      "color": 16711935
+    },
+    "class_type": "ImageColorToMask"
+  },
+  "16": {
+    "inputs": {
+      "mask": [
+        "15",
+        0
+      ]
+    },
+    "class_type": "InvertMask"
+  },
+  "17": {
+    "inputs": {
+      "image": [
+        "14",
+        0
+      ],
+      "alpha": [
+        "16",
+        0
+      ]
+    },
+    "class_type": "JoinImageWithAlpha"
+  },
+  "18": {
+    "inputs": {
+      "filename_prefix": "polar_bear_north",
+      "images": [
+        "17",
+        0
+      ]
+    },
+    "class_type": "SaveImage"
+  },
+  "20": {
+    "inputs": {
+      "text": "cute polar bear standing, facing right side view, east view, isometric game asset, simple low-poly style, clean outlines, solid magenta background #ff00ff, centered, full body visible, arctic white fur, soft shadows, high quality",
+      "clip": [
+        "1",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "21": {
+    "inputs": {
+      "conditioning": [
+        "20",
+        0
+      ]
+    },
+    "class_type": "ConditioningZeroOut"
+  },
+  "22": {
+    "inputs": {
+      "seed": 0,
+      "steps": 8,
+      "cfg": 1,
+      "sampler_name": "res_multistep",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "4",
+        0
+      ],
+      "positive": [
+        "20",
+        0
+      ],
+      "negative": [
+        "21",
+        0
+      ],
+      "latent_image": [
+        "5",
+        0
+      ]
+    },
+    "class_type": "KSampler"
+  },
+  "23": {
+    "inputs": {
+      "samples": [
+        "22",
+        0
+      ],
+      "vae": [
+        "2",
+        0
+      ]
+    },
+    "class_type": "VAEDecode"
+  },
+  "24": {
+    "inputs": {
+      "image": [
+        "23",
+        0
+      ],
+      "upscale_method": "lanczos",
+      "width": 256,
+      "height": 256,
+      "crop": "center"
+    },
+    "class_type": "ImageScale"
+  },
+  "25": {
+    "inputs": {
+      "image": [
+        "24",
+        0
+      ],
+      "color": 16711935
+    },
+    "class_type": "ImageColorToMask"
+  },
+  "26": {
+    "inputs": {
+      "mask": [
+        "25",
+        0
+      ]
+    },
+    "class_type": "InvertMask"
+  },
+  "27": {
+    "inputs": {
+      "image": [
+        "24",
+        0
+      ],
+      "alpha": [
+        "26",
+        0
+      ]
+    },
+    "class_type": "JoinImageWithAlpha"
+  },
+  "28": {
+    "inputs": {
+      "filename_prefix": "polar_bear_east",
+      "images": [
+        "27",
+        0
+      ]
+    },
+    "class_type": "SaveImage"
+  },
+  "30": {
+    "inputs": {
+      "text": "cute polar bear standing, facing toward camera, south front view, isometric game asset, simple low-poly style, clean outlines, solid magenta background #ff00ff, centered, full body visible, arctic white fur, soft shadows, high quality",
+      "clip": [
+        "1",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "31": {
+    "inputs": {
+      "conditioning": [
+        "30",
+        0
+      ]
+    },
+    "class_type": "ConditioningZeroOut"
+  },
+  "32": {
+    "inputs": {
+      "seed": 0,
+      "steps": 8,
+      "cfg": 1,
+      "sampler_name": "res_multistep",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "4",
+        0
+      ],
+      "positive": [
+        "30",
+        0
+      ],
+      "negative": [
+        "31",
+        0
+      ],
+      "latent_image": [
+        "5",
+        0
+      ]
+    },
+    "class_type": "KSampler"
+  },
+  "33": {
+    "inputs": {
+      "samples": [
+        "32",
+        0
+      ],
+      "vae": [
+        "2",
+        0
+      ]
+    },
+    "class_type": "VAEDecode"
+  },
+  "34": {
+    "inputs": {
+      "image": [
+        "33",
+        0
+      ],
+      "upscale_method": "lanczos",
+      "width": 256,
+      "height": 256,
+      "crop": "center"
+    },
+    "class_type": "ImageScale"
+  },
+  "35": {
+    "inputs": {
+      "image": [
+        "34",
+        0
+      ],
+      "color": 16711935
+    },
+    "class_type": "ImageColorToMask"
+  },
+  "36": {
+    "inputs": {
+      "mask": [
+        "35",
+        0
+      ]
+    },
+    "class_type": "InvertMask"
+  },
+  "37": {
+    "inputs": {
+      "image": [
+        "34",
+        0
+      ],
+      "alpha": [
+        "36",
+        0
+      ]
+    },
+    "class_type": "JoinImageWithAlpha"
+  },
+  "38": {
+    "inputs": {
+      "filename_prefix": "polar_bear_south",
+      "images": [
+        "37",
+        0
+      ]
+    },
+    "class_type": "SaveImage"
+  },
+  "40": {
+    "inputs": {
+      "text": "cute polar bear standing, facing left side view, west view, isometric game asset, simple low-poly style, clean outlines, solid magenta background #ff00ff, centered, full body visible, arctic white fur, soft shadows, high quality",
+      "clip": [
+        "1",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "41": {
+    "inputs": {
+      "conditioning": [
+        "40",
+        0
+      ]
+    },
+    "class_type": "ConditioningZeroOut"
+  },
+  "42": {
+    "inputs": {
+      "seed": 0,
+      "steps": 8,
+      "cfg": 1,
+      "sampler_name": "res_multistep",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "4",
+        0
+      ],
+      "positive": [
+        "40",
+        0
+      ],
+      "negative": [
+        "41",
+        0
+      ],
+      "latent_image": [
+        "5",
+        0
+      ]
+    },
+    "class_type": "KSampler"
+  },
+  "43": {
+    "inputs": {
+      "samples": [
+        "42",
+        0
+      ],
+      "vae": [
+        "2",
+        0
+      ]
+    },
+    "class_type": "VAEDecode"
+  },
+  "44": {
+    "inputs": {
+      "image": [
+        "43",
+        0
+      ],
+      "upscale_method": "lanczos",
+      "width": 256,
+      "height": 256,
+      "crop": "center"
+    },
+    "class_type": "ImageScale"
+  },
+  "45": {
+    "inputs": {
+      "image": [
+        "44",
+        0
+      ],
+      "color": 16711935
+    },
+    "class_type": "ImageColorToMask"
+  },
+  "46": {
+    "inputs": {
+      "mask": [
+        "45",
+        0
+      ]
+    },
+    "class_type": "InvertMask"
+  },
+  "47": {
+    "inputs": {
+      "image": [
+        "44",
+        0
+      ],
+      "alpha": [
+        "46",
+        0
+      ]
+    },
+    "class_type": "JoinImageWithAlpha"
+  },
+  "48": {
+    "inputs": {
+      "filename_prefix": "polar_bear_west",
+      "images": [
+        "47",
+        0
+      ]
+    },
+    "class_type": "SaveImage"
+  },
+  "50": {
+    "inputs": {
+      "text": "seamless snow texture, isometric arctic game tile, white powdery snow, subtle sparkles, flat lighting, solid magenta background #ff00ff, game asset, high quality",
+      "clip": [
+        "1",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "51": {
+    "inputs": {
+      "conditioning": [
+        "50",
+        0
+      ]
+    },
+    "class_type": "ConditioningZeroOut"
+  },
+  "52": {
+    "inputs": {
+      "seed": 0,
+      "steps": 8,
+      "cfg": 1,
+      "sampler_name": "res_multistep",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "4",
+        0
+      ],
+      "positive": [
+        "50",
+        0
+      ],
+      "negative": [
+        "51",
+        0
+      ],
+      "latent_image": [
+        "5",
+        0
+      ]
+    },
+    "class_type": "KSampler"
+  },
+  "53": {
+    "inputs": {
+      "samples": [
+        "52",
+        0
+      ],
+      "vae": [
+        "2",
+        0
+      ]
+    },
+    "class_type": "VAEDecode"
+  },
+  "54": {
+    "inputs": {
+      "image": [
+        "53",
+        0
+      ],
+      "upscale_method": "lanczos",
+      "width": 256,
+      "height": 256,
+      "crop": "center"
+    },
+    "class_type": "ImageScale"
+  },
+  "55": {
+    "inputs": {
+      "image": [
+        "54",
+        0
+      ],
+      "color": 16711935
+    },
+    "class_type": "ImageColorToMask"
+  },
+  "56": {
+    "inputs": {
+      "mask": [
+        "55",
+        0
+      ]
+    },
+    "class_type": "InvertMask"
+  },
+  "57": {
+    "inputs": {
+      "image": [
+        "54",
+        0
+      ],
+      "alpha": [
+        "56",
+        0
+      ]
+    },
+    "class_type": "JoinImageWithAlpha"
+  },
+  "58": {
+    "inputs": {
+      "filename_prefix": "tile_snow",
+      "images": [
+        "57",
+        0
+      ]
+    },
+    "class_type": "SaveImage"
+  },
+  "60": {
+    "inputs": {
+      "text": "seamless ice texture, isometric arctic game tile, frozen lake ice, glossy reflective surface, pale blue white, flat lighting, solid magenta background #ff00ff, game asset, high quality",
+      "clip": [
+        "1",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "61": {
+    "inputs": {
+      "conditioning": [
+        "60",
+        0
+      ]
+    },
+    "class_type": "ConditioningZeroOut"
+  },
+  "62": {
+    "inputs": {
+      "seed": 0,
+      "steps": 8,
+      "cfg": 1,
+      "sampler_name": "res_multistep",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "4",
+        0
+      ],
+      "positive": [
+        "60",
+        0
+      ],
+      "negative": [
+        "61",
+        0
+      ],
+      "latent_image": [
+        "5",
+        0
+      ]
+    },
+    "class_type": "KSampler"
+  },
+  "63": {
+    "inputs": {
+      "samples": [
+        "62",
+        0
+      ],
+      "vae": [
+        "2",
+        0
+      ]
+    },
+    "class_type": "VAEDecode"
+  },
+  "64": {
+    "inputs": {
+      "image": [
+        "63",
+        0
+      ],
+      "upscale_method": "lanczos",
+      "width": 256,
+      "height": 256,
+      "crop": "center"
+    },
+    "class_type": "ImageScale"
+  },
+  "65": {
+    "inputs": {
+      "image": [
+        "64",
+        0
+      ],
+      "color": 16711935
+    },
+    "class_type": "ImageColorToMask"
+  },
+  "66": {
+    "inputs": {
+      "mask": [
+        "65",
+        0
+      ]
+    },
+    "class_type": "InvertMask"
+  },
+  "67": {
+    "inputs": {
+      "image": [
+        "64",
+        0
+      ],
+      "alpha": [
+        "66",
+        0
+      ]
+    },
+    "class_type": "JoinImageWithAlpha"
+  },
+  "68": {
+    "inputs": {
+      "filename_prefix": "tile_ice",
+      "images": [
+        "67",
+        0
+      ]
+    },
+    "class_type": "SaveImage"
+  },
+  "70": {
+    "inputs": {
+      "text": "seamless cracked ice texture, isometric arctic game tile, frozen lake with dark cracks, pale blue white, flat lighting, solid magenta background #ff00ff, game asset, high quality",
+      "clip": [
+        "1",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "71": {
+    "inputs": {
+      "conditioning": [
+        "70",
+        0
+      ]
+    },
+    "class_type": "ConditioningZeroOut"
+  },
+  "72": {
+    "inputs": {
+      "seed": 0,
+      "steps": 8,
+      "cfg": 1,
+      "sampler_name": "res_multistep",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "4",
+        0
+      ],
+      "positive": [
+        "70",
+        0
+      ],
+      "negative": [
+        "71",
+        0
+      ],
+      "latent_image": [
+        "5",
+        0
+      ]
+    },
+    "class_type": "KSampler"
+  },
+  "73": {
+    "inputs": {
+      "samples": [
+        "72",
+        0
+      ],
+      "vae": [
+        "2",
+        0
+      ]
+    },
+    "class_type": "VAEDecode"
+  },
+  "74": {
+    "inputs": {
+      "image": [
+        "73",
+        0
+      ],
+      "upscale_method": "lanczos",
+      "width": 256,
+      "height": 256,
+      "crop": "center"
+    },
+    "class_type": "ImageScale"
+  },
+  "75": {
+    "inputs": {
+      "image": [
+        "74",
+        0
+      ],
+      "color": 16711935
+    },
+    "class_type": "ImageColorToMask"
+  },
+  "76": {
+    "inputs": {
+      "mask": [
+        "75",
+        0
+      ]
+    },
+    "class_type": "InvertMask"
+  },
+  "77": {
+    "inputs": {
+      "image": [
+        "74",
+        0
+      ],
+      "alpha": [
+        "76",
+        0
+      ]
+    },
+    "class_type": "JoinImageWithAlpha"
+  },
+  "78": {
+    "inputs": {
+      "filename_prefix": "tile_ice_cracks",
+      "images": [
+        "77",
+        0
+      ]
+    },
+    "class_type": "SaveImage"
+  }
+}

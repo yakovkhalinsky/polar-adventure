@@ -1,0 +1,18 @@
+{
+  "polar-bear": {
+    "sheet": "characters/polar-bear.png",
+    "frameWidth": 64,
+    "frameHeight": 64,
+    "directionRows": {
+      "north": 0,
+      "east": 1,
+      "south": 2,
+      "west": 3
+    }
+  },
+  "tiles": {
+    "snow": "tiles/snow.png",
+    "ice": "tiles/ice.png",
+    "ice-cracks": "tiles/ice-cracks.png"
+  }
+}
