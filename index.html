@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="description" content="Polar Adventures - an arctic isometric adventure game" />
+    <title>Polar Adventures</title>
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #0b1d2e;
+        color: #e6f7ff;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      }
+
+      #game-container {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      canvas {
+        display: block;
+        max-width: 100%;
+        max-height: 100%;
+      }
+
+      #ui-layer {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        padding: 1rem;
+      }
+
+      #ui-layer .hud {
+        pointer-events: auto;
+        background: rgba(11, 29, 46, 0.7);
+        border: 1px solid rgba(166, 210, 255, 0.25);
+        border-radius: 0.5rem;
+        padding: 0.5rem 0.75rem;
+        backdrop-filter: blur(4px);
+        font-size: 0.9rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="game-container"></div>
+    <div id="ui-layer">
+      <div class="hud">Use Arrow Keys or WASD to move the polar bear.</div>
+      <div class="hud">Polar Adventures v0.1.0</div>
+    </div>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>
