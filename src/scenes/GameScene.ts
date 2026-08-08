@@ -34,9 +34,9 @@ export class GameScene extends Phaser.Scene {
 
     this.drawIsometricGrid();
 
+    // Spawn the player directly on the center tile of the grid.
     const startIso = this.cartesianToIsometric(0, 0);
-    this.player = new Player(this, startIso.x, startIso.y - TILE_HEIGHT * 2);
-    this.player.setScale(0.9);
+    this.player = new Player(this, startIso.x, startIso.y);
 
     this.cursors = this.input.keyboard!.createCursorKeys();
     this.wasd = this.input.keyboard!.addKeys({
@@ -45,12 +45,18 @@ export class GameScene extends Phaser.Scene {
       left: Phaser.Input.Keyboard.KeyCodes.A,
       right: Phaser.Input.Keyboard.KeyCodes.D,
     }) as Record<Direction, Phaser.Input.Keyboard.Key>;
+
+    // Center the camera on the player so the map feels centered on screen.
+    this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
+    this.cameras.main.setZoom(1);
   }
 
   update(): void {
     this.player.update(this.cursors, this.wasd);
 
-    // Keep tiles depth-sorted relative to the player so walking behind/in-front works.
+    // Depth-sort every game object by its feet/base Y position so that
+    // characters naturally walk behind tiles that are "in front" of them
+    // and in front of tiles that are "behind" them.
     this.tileGroup.getChildren().forEach((child) => {
       const tile = child as Phaser.GameObjects.Image;
       tile.setDepth(tile.y);
@@ -59,13 +65,13 @@ export class GameScene extends Phaser.Scene {
 
   private drawIsometricGrid(): void {
     const centerX = this.cameras.main.width / 2;
-    const offsetY = this.cameras.main.height / 4;
+    const centerY = this.cameras.main.height / 2;
 
     for (let row = 0; row < GRID_SIZE; row++) {
       for (let col = 0; col < GRID_SIZE; col++) {
         const { x, y } = this.cartesianToIsometric(col - GRID_SIZE / 2, row - GRID_SIZE / 2);
         const tileX = centerX + x;
-        const tileY = offsetY + y;
+        const tileY = centerY + y;
 
         // Pick a tile texture based on a simple pattern.
         const key = this.pickTileTexture(row, col);
