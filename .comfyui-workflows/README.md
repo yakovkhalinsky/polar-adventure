@@ -13,6 +13,28 @@ python3 .comfyui-workflows/postprocess_assets.py
 npm run build
 ```
 
+## Windows ComfyUI Desktop setup
+
+Run this PowerShell script **on your Windows PC** to install the recommended model stack:
+
+```powershell
+.\setup_windows_comfyui.ps1
+```
+
+It downloads:
+
+- SD 1.5 base checkpoint (`v1-5-pruned-emaonly.safetensors`)
+- Improved VAE
+- ControlNet OpenPose + Canny
+
+It also installs the custom nodes:
+
+- `ComfyUI-layerdiffuse`
+- `rembg-comfyui-node`
+- `ComfyUI-AdvancedTiling`
+
+You will still need to download LoRAs manually from Civitai because they require login.
+
 ## Modes
 
 ### `--mode turbo` (default)
@@ -30,16 +52,30 @@ This is the heaviest option. On an RTX 4060 8GB it works but leaves little headr
 Uses a smaller **Stable Diffusion 1.5** checkpoint, leaving room for LoRAs,
 ControlNet, and transparent-background nodes.
 
-Required models:
+Required models after running the setup script:
 
 - Checkpoint: `v1-5-pruned-emaonly.safetensors` in `ComfyUI/models/checkpoints/`
-- VAE: `ae.safetensors` in `ComfyUI/models/vae/`
+- VAE: `vae-ft-mse-840000-ema-pruned.safetensors` in `ComfyUI/models/vae/`
 
 Optional upgrades for much better results:
 
 - LoRA: isometric or pixel-art style LoRA in `ComfyUI/models/loras/`
 - ControlNet: `control_v11p_sd15_openpose.pth` for consistent polar-bear poses
 - Nodes: `ComfyUI-layerdiffuse` for native transparent PNG output
+
+## Manual ComfyUI workflow JSONs
+
+If you prefer to work directly in the ComfyUI Desktop app, import one of these workflows:
+
+| File | Purpose |
+|------|---------|
+| `polar_bear_walk_v1.json` | Single polar bear front-view frame. Good for testing your model stack. |
+| `polar_bear_walk_16frame.json` | Template for a full 16-frame walk cycle. Duplicate the prompt/sampler/save chain for each direction and pose. |
+
+Both workflows expect:
+
+- `v1-5-pruned-emaonly.safetensors`
+- An isometric/pixel-art LoRA (edit the `LoraLoader` widget to match your filename)
 
 ## What gets generated
 

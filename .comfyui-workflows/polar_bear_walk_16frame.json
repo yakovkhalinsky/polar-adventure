@@ -1,0 +1,138 @@
+{
+  "last_node_id": 9,
+  "last_link_id": 9,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "CheckpointLoaderSimple",
+      "pos": [50, 50],
+      "size": [315, 98],
+      "inputs": [],
+      "outputs": [
+        ["MODEL", 0],
+        ["CLIP", 1],
+        ["VAE", 2]
+      ],
+      "widgets_values": ["v1-5-pruned-emaonly.safetensors"]
+    },
+    {
+      "id": 2,
+      "type": "CLIPTextEncode",
+      "pos": [50, 220],
+      "size": [400, 200],
+      "inputs": [
+        ["clip", [1, 1]]
+      ],
+      "outputs": [
+        ["CONDITIONING", 0]
+      ],
+      "widgets_values": [
+        "cute polar bear character, chibi proportions, front view, facing toward camera, full body visible, standing pose, both feet on ground, contact frame, white fluffy fur, small black eyes and nose, game sprite, clean vector-like style, soft shading, consistent character design, solid bright lime green background #00ff00, centered, high quality"
+      ]
+    },
+    {
+      "id": 3,
+      "type": "CLIPTextEncode",
+      "pos": [50, 460],
+      "size": [400, 160],
+      "inputs": [
+        ["clip", [1, 1]]
+      ],
+      "outputs": [
+        ["CONDITIONING", 0]
+      ],
+      "widgets_values": [
+        "blurry, low quality, watermark, signature, text, cropped, worst quality, photorealistic, 3d render"
+      ]
+    },
+    {
+      "id": 4,
+      "type": "EmptyLatentImage",
+      "pos": [50, 650],
+      "size": [320, 106],
+      "inputs": [],
+      "outputs": [
+        ["LATENT", 0]
+      ],
+      "widgets_values": [512, 512, 1]
+    },
+    {
+      "id": 5,
+      "type": "KSampler",
+      "pos": [520, 220],
+      "size": [315, 262],
+      "inputs": [
+        ["model", [1, 0]],
+        ["positive", [2, 0]],
+        ["negative", [3, 0]],
+        ["latent_image", [4, 0]]
+      ],
+      "outputs": [
+        ["LATENT", 0]
+      ],
+      "widgets_values": [3000, 20, 7, "dpmpp_2m", "karras", 1]
+    },
+    {
+      "id": 6,
+      "type": "VAEDecode",
+      "pos": [900, 220],
+      "size": [210, 46],
+      "inputs": [
+        ["samples", [5, 0]],
+        ["vae", [1, 2]]
+      ],
+      "outputs": [
+        ["IMAGE", 0]
+      ]
+    },
+    {
+      "id": 7,
+      "type": "SaveImage",
+      "pos": [1180, 220],
+      "size": [315, 270],
+      "inputs": [
+        ["images", [6, 0]]
+      ],
+      "widgets_values": ["polar_bear_south_f1"]
+    },
+    {
+      "id": 8,
+      "type": "LoraLoader",
+      "pos": [50, 800],
+      "size": [340, 106],
+      "inputs": [
+        ["model", [1, 0]],
+        ["clip", [1, 1]]
+      ],
+      "outputs": [
+        ["MODEL", 0],
+        ["CLIP", 1]
+      ],
+      "widgets_values": ["your_isometric_lora_here.safetensors", 0.7, 0.7]
+    },
+    {
+      "id": 9,
+      "type": "Note",
+      "pos": [50, 940],
+      "size": [400, 200],
+      "widgets_values": [
+        "16-FRAME WALK CYCLE WORKFLOW\n\nDuplicate the prompt+KSampler+SaveImage chain 16 times:\n- 4 directions: north, east, south, west\n- 4 poses per direction:\n  1. contact (both feet on ground)\n  2. stride left leg forward\n  3. contact opposite phase\n  4. stride right leg forward\n\nKeep the same seed per direction and only change the pose description.\nReplace 'your_isometric_lora_here' with your downloaded LoRA filename."
+      ]
+    }
+  ],
+  "links": [
+    [1, 1, 2, "clip", 1],
+    [1, 1, 3, "clip", 1],
+    [1, 0, 5, "model", 1],
+    [2, 0, 5, "positive", 1],
+    [3, 0, 5, "negative", 1],
+    [4, 0, 5, "latent_image", 1],
+    [5, 0, 6, "samples", 1],
+    [1, 2, 6, "vae", 1],
+    [6, 0, 7, "images", 1]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {},
+  "version": 0.4
+}
