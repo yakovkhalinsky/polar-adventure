@@ -320,6 +320,22 @@ if (-not $SkipNodes) {
             try {
                 git clone --depth=1 $node.Repo $target
                 Write-Success "Installed: $($node.Name)"
+
+                # Install node-specific Python dependencies if a requirements file exists.
+                if ($node.Name -eq "ComfyUI-Tripo") {
+                    $reqFile = Join-Path $target "requirements.txt"
+                    if (Test-Path $reqFile) {
+                        Write-Info "  Installing Python requirements for $($node.Name)..."
+                        try {
+                            & python -m pip install -r $reqFile
+                            Write-Success "  Requirements installed for $($node.Name)"
+                        }
+                        catch {
+                            Write-Warn "  Could not install requirements for $($node.Name): $_"
+                            Write-Warn "  You may need to run: python -m pip install -r $reqFile"
+                        }
+                    }
+                }
             }
             catch {
                 Write-Error "FAILED: $_"
