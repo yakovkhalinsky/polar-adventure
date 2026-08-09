@@ -310,8 +310,18 @@ def poll_until_done(server: str, prompt_id: str, timeout: float = 300.0) -> dict
         data = resp.json()
         if prompt_id in data:
             entry = data[prompt_id]
-            if entry.get("status", {}).get("status_str") == "success":
+            status = entry.get("status", {}).get("status_str")
+            if status == "success":
                 return entry
+            if status == "error":
+                # Surface the first exception message so callers fail fast.
+                messages = entry.get("messages", [])
+                for msg in messages:
+                    if msg[0] == "execution_error":
+                        node_id = msg[1].get("node_id", "?")
+                        exc = msg[1].get("exception_message", "unknown")
+                        raise RuntimeError(f"ComfyUI execution error at node {node_id}: {exc}")
+                raise RuntimeError(f"ComfyUI execution error for prompt {prompt_id}")
             if entry.get("status", {}).get("completed"):
                 return entry
         time.sleep(2.0)

@@ -351,6 +351,43 @@ function Install-NodeRequirements {
     }
 }
 
+# ---------------------------------------------------------------------------
+# Patch ComfyUI-layerdiffuse for newer ComfyUI versions
+# ---------------------------------------------------------------------------
+function Install-LayerDiffusePatch {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$TargetPath
+    )
+
+    $layeredDiffusionPy = Join-Path $TargetPath "layered_diffusion.py"
+    if (-not (Test-Path $layeredDiffusionPy)) { return }
+
+    $content = Get-Content $layeredDiffusionPy -Raw
+    $oldLine = "return JoinImageWithAlpha().join_image_with_alpha(image, alpha)"
+
+    if ($content -notlike "*JoinImageWithAlpha*") {
+        Write-Success "  LayerDiffuse JoinImageWithAlpha patch already applied or not needed"
+        return
+    }
+
+    if ($content -like "*$oldLine*") {
+        Write-Warn "  Patching LayerDiffuse for newer ComfyUI (JoinImageWithAlpha API change)..."
+        $newBlock = @'
+try:
+    return JoinImageWithAlpha().execute(image, alpha)
+except AttributeError:
+    return JoinImageWithAlpha().join_image_with_alpha(image, alpha)
+'@
+        $content = $content.Replace($oldLine, $newBlock.Trim())
+        Set-Content $layeredDiffusionPy $content -NoNewline
+        Write-Success "  Patched layered_diffusion.py for ComfyUI compatibility"
+    }
+    else {
+        Write-Warn "  Could not locate expected JoinImageWithAlpha call; manual check may be needed"
+    }
+}
+
 if (-not $SkipNodes) {
     Write-Host ""
     Write-Info "Installing custom nodes..."
@@ -382,6 +419,10 @@ if (-not $SkipNodes) {
         }
 
         Install-NodeRequirements -TargetPath $target -NodeName $node.Name
+
+        if ($node.Name -eq "ComfyUI-layerdiffuse") {
+            Install-LayerDiffusePatch -TargetPath $target
+        }
     }
 
     Write-Host ""
@@ -400,4 +441,4 @@ if (-not $SkipNodes) {
 Write-Host ""
 Write-Success "Setup complete. Restart ComfyUI Desktop to load new models and nodes."
 Write-Info "Then import the test workflow:"
-Write-Info "  https://raw.githubusercontent.com/yakovkhalinsky/polar-adventure/main/.comfyui-workflows/polar_bear_single_sd15.json"
+Write-Info "  https://raw.githubusercontent.com/yakovkhalinsky/polar-adventure/main/.comfyui-workflows/polar_bear_flat_layerdiffuse.json"
