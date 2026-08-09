@@ -13,6 +13,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 import time
 from collections import deque
@@ -27,6 +28,8 @@ from PIL import Image
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "public/assets"
 PREVIEW = OUT / "generated"
+
+BFL_BASE_URL = "https://api.bfl.ai"
 
 
 VOXEL_LORA = "VoxelXL_v1.safetensors"
@@ -319,6 +322,75 @@ def upload_image(server: str, path: Path) -> str:
     return data["name"]
 
 
+# ---------------------------------------------------------------------------
+# Black Forest Labs FLUX API helpers
+# ---------------------------------------------------------------------------
+
+def bfl_submit(api_key: str, prompt: str, width: int, height: int, seed: int,
+               model: str = "flux-pro-1.1", **extra: Any) -> tuple[str, str]:
+    """Submit a generation request to the BFL API and return (request_id, polling_url)."""
+    url = urljoin(BFL_BASE_URL, f"/v1/{model}")
+    payload: dict[str, Any] = {
+        "prompt": prompt,
+        "width": width,
+        "height": height,
+        "seed": seed,
+    }
+    payload.update(extra)
+    resp = requests.post(
+        url,
+        headers={"x-key": api_key, "Content-Type": "application/json"},
+        json=payload,
+        timeout=30,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    request_id = data.get("id") or data.get("request_id")
+    polling_url = data.get("polling_url")
+    if not request_id:
+        raise RuntimeError(f"BFL submit returned no request id: {data}")
+    print(f"  BFL {model} submitted: {request_id}")
+    return str(request_id), polling_url
+
+
+def bfl_poll_result(api_key: str, request_id: str,
+                    polling_url: str | None = None,
+                    timeout: float = 300.0) -> dict[str, Any]:
+    """Poll the BFL result endpoint until the image is ready."""
+    if polling_url is None:
+        polling_url = urljoin(BFL_BASE_URL, "/v1/get_result")
+    start = time.time()
+    while time.time() - start < timeout:
+        resp = requests.get(
+            polling_url,
+            headers={"x-key": api_key},
+            params={"id": request_id},
+            timeout=30,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        status = data.get("status", "")
+        if status == "Ready":
+            return data
+        if status in ("Failed", "Error"):
+            raise RuntimeError(f"BFL generation failed: {data}")
+        print(f"  BFL status: {status}, waiting...")
+        time.sleep(2.0)
+    raise RuntimeError(f"BFL generation did not complete within {timeout}s")
+
+
+def bfl_download_image(result: dict[str, Any], dest: Path) -> None:
+    """Download the generated image from the BFL result to dest."""
+    sample_url = result.get("result", {}).get("sample")
+    if not sample_url:
+        raise RuntimeError(f"BFL result has no sample URL: {result}")
+    resp = requests.get(sample_url, timeout=120)
+    resp.raise_for_status()
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_bytes(resp.content)
+    print(f"  downloaded {dest}")
+
+
 def isolate_largest_sprite(img: Image.Image, target_size: int, raw_path: Path | None = None) -> Image.Image:
     """Crop to the largest foreground region and make the background transparent.
 
@@ -428,9 +500,19 @@ def generate_single(server: str, key: str, seed: int, use_img2img: bool = False,
     return spec["out"]
 
 
-def make_bear_reference(server: str, seed: int, size: int = 512,
-                        direction: str = "down") -> Path:
-    """Generate a single consistent adult polar bear reference on white for a given direction."""
+def make_bear_reference(server: str | None, seed: int, size: int = 512,
+                        direction: str = "down",
+                        style_ref: Path | None = None,
+                        use_sd15: bool = False,
+                        bfl_api_key: str | None = None,
+                        bfl_model: str = "flux-pro-1.1") -> Path:
+    """Generate a single consistent adult polar bear reference on white for a given direction.
+
+    If bfl_api_key is provided, the Black Forest Labs FLUX API is used instead of ComfyUI.
+    If style_ref is provided, it is uploaded to ComfyUI and used as the img2img init image so the
+    generated frame inherits the reference's colors, outfit, proportions, and style.
+    If use_sd15 is True, the SD 1.5 checkpoint is used instead of CartoonXL SDXL.
+    """
     direction_prompts = {
         "up": "seen from behind, back view, walking away from camera, facing away",
         "right": "side view facing right, walking to the right, profile view",
@@ -438,27 +520,56 @@ def make_bear_reference(server: str, seed: int, size: int = 512,
         "left": "side view facing left, walking to the left, profile view",
     }
     prompt = (
-        "3D rendered anthropomorphic adult male polar bear character, voxel style, low poly, Fez-like, "
-        "realistic adult human proportions, seven heads tall, tall slender man-like body, "
-        "very long muscular humanoid legs, narrow waist, very broad shoulders, "
-        "small head relative to body, elongated mature snout, serious adult expression, "
+        "anthropomorphic adult male polar bear character, Minecraft voxel style, blocky, "
+        "muscular humanoid build, broad muscular shoulders, thick arms, strong stocky body, "
+        "wearing a solid grey hoodie with drawstrings and plain blue denim jeans with no rips, "
+        "white fur, black and white high-top sneakers like Converse, no gloves, bare paws, no headband, "
         f"{direction_prompts[direction]}, "
-        "wearing a solid blue hoodie with drawstrings and dark blue denim jeans, white fur, "
-        "no gloves, no headband, full length dark pants, "
-        "soft directional studio lighting, ambient occlusion, subtle cast shadow, "
         "pure white background, isolated character, centered, "
         "no text, no watermark, no border"
     )
-    out = PREVIEW / f"characters/bear-reference-{direction}.png"
     negative = (
         f"{NEGATIVE_SPRITE}, {NEGATIVE_OBJECT}, baby, cub, child, toddler, chibi, kawaii, "
         "cute, big eyes, large eyes, round face, big head, short legs, stubby legs, "
-        "3 heads tall, 4 heads tall, belly, overweight, chubby, "
-        "white pants, light pants, grey pants, bare legs, shorts, skirt, "
+        "belly, overweight, chubby, gloves, mittens, wrist cuffs, "
+        "barefoot, bare paws, no shoes, sandals, boots, high heels, "
+        "white hoodie, black hoodie, blue hoodie, pink hoodie, red hoodie, "
+        "ripped jeans, torn jeans, distressed jeans, shorts, skirt, bare chest, "
         "cartoon, anime, mascot, plushie, toy, figurine, Funko, collectable, "
-        "flat shading, 2d illustration, white hoodie, grey background, textured background, photograph"
+        "flat shading, 2d illustration, grey background, gradient background, textured background, photograph"
     )
-    workflow = base_workflow(1024, 1024, prompt, negative, seed, cfg=9.0, steps=40)
+    out = PREVIEW / f"characters/bear-reference-{direction}.png"
+
+    if bfl_api_key:
+        # BFL supports square generation well; use 1024x1024 for detail.
+        request_id, polling_url = bfl_submit(bfl_api_key, prompt, 1024, 1024, seed, model=bfl_model)
+        result = bfl_poll_result(bfl_api_key, request_id, polling_url=polling_url)
+        bfl_download_image(result, out)
+        with Image.open(out).convert("RGBA") as img:
+            isolate_largest_sprite(img, size, raw_path=out.with_suffix(".raw.png")).save(out)
+        return out
+
+    if server is None:
+        raise ValueError("No ComfyUI server provided and no BFL API key set")
+
+    if use_sd15:
+        checkpoint = "v1-5-pruned-emaonly.safetensors"
+        width, height, gen_steps, gen_cfg = 512, 512, 35, 7.5
+    else:
+        checkpoint = "cartoonxl_v10.safetensors"
+        width, height, gen_steps, gen_cfg = 1024, 1024, 40, 9.0
+
+    if style_ref is not None and style_ref.exists():
+        uploaded_name = upload_image(server, style_ref)
+        # Low denoise preserves the reference style/outfit; prompt steers direction.
+        workflow = img2img_workflow(
+            width, height, prompt, negative, seed, Path(uploaded_name),
+            denoise=0.35, checkpoint=checkpoint, steps=gen_steps, cfg=gen_cfg, lora_name=None,
+        )
+    else:
+        workflow = base_workflow(width, height, prompt, negative, seed,
+                                 checkpoint=checkpoint, steps=gen_steps, cfg=gen_cfg, lora_name=None)
+
     prompt_id = submit(server, workflow)
     print(f"[bear-reference-{direction}] queued {prompt_id}")
     entry = poll_until_done(server, prompt_id)
@@ -470,7 +581,7 @@ def make_bear_reference(server: str, seed: int, size: int = 512,
 
 
 def make_bear_direction(server: str, direction: str, reference: Path, seed: int,
-                        pose: str = "") -> Path:
+                        pose: str = "", use_sd15: bool = False) -> Path:
     """Generate one direction frame using img2img from the reference for consistency."""
     directions = {
         "up": "seen from behind, walking away, back view, facing away, upright humanoid posture",
@@ -479,28 +590,38 @@ def make_bear_direction(server: str, direction: str, reference: Path, seed: int,
         "down": "front view walking toward viewer, facing camera, upright humanoid posture",
     }
     prompt = (
-        "3D rendered anthropomorphic adult male polar bear character, same voxel design and outfit as reference, "
-        "realistic adult human proportions, seven heads tall, tall slender man-like body, "
-        "very long muscular humanoid legs, narrow waist, very broad shoulders, "
-        "small head relative to body, elongated mature snout, serious adult expression, "
-        "wearing a solid blue hoodie with drawstrings and dark blue denim jeans, white fur, "
+        "anthropomorphic adult male polar bear character, same Minecraft voxel design and outfit as reference, "
+        "muscular humanoid build, broad muscular shoulders, thick arms, strong stocky body, "
+        "wearing a solid grey hoodie with drawstrings and plain blue denim jeans with no rips, "
+        "white fur, black and white high-top sneakers like Converse, no gloves, bare paws, no headband, "
         f"{directions[direction]}, {pose}, "
-        "soft directional studio lighting, ambient occlusion, subtle cast shadow, "
         "pure white background, isolated character, centered, "
         "no text, no watermark, no border"
     )
     negative = (
         f"{NEGATIVE_SPRITE}, {NEGATIVE_OBJECT}, baby, cub, child, toddler, chibi, kawaii, "
         "cute, big eyes, large eyes, round face, big head, short legs, stubby legs, "
-        "3 heads tall, 4 heads tall, belly, overweight, chubby, "
+        "belly, overweight, chubby, gloves, mittens, wrist cuffs, "
+        "barefoot, bare paws, no shoes, sandals, boots, high heels, "
+        "white hoodie, black hoodie, blue hoodie, pink hoodie, red hoodie, "
+        "ripped jeans, torn jeans, distressed jeans, shorts, skirt, bare chest, "
         "cartoon, anime, mascot, plushie, toy, figurine, Funko, collectable, "
-        "flat shading, 2d illustration, white hoodie, grey background, textured background, photograph"
+        "flat shading, 2d illustration, grey background, gradient background, textured background, photograph"
     )
     out = PREVIEW / f"characters/bear-{direction}-{seed}.png"
-    # Upload the reference to ComfyUI's input folder so img2img can load it.
+
     uploaded_name = upload_image(server, reference)
-    # Use Voxel LoRA for consistent style; moderate denoise keeps reference while allowing pose change.
-    workflow = img2img_workflow(1024, 1024, prompt, negative, seed, Path(uploaded_name), denoise=0.55)
+
+    if use_sd15:
+        # SD 1.5 works at 512x512 with the uploaded reference, low denoise keeps the style/outfit.
+        workflow = img2img_workflow(
+            512, 512, prompt, negative, seed, Path(uploaded_name),
+            denoise=0.45, checkpoint="v1-5-pruned-emaonly.safetensors",
+            steps=30, cfg=7.5, lora_name=None,
+        )
+    else:
+        workflow = img2img_workflow(1024, 1024, prompt, negative, seed, Path(uploaded_name), denoise=0.55)
+
     prompt_id = submit(server, workflow)
     print(f"[bear-{direction}-{seed}] queued {prompt_id}")
     entry = poll_until_done(server, prompt_id)
@@ -554,11 +675,21 @@ def assemble_bear_sheet(directions: dict[str, list[Path]]) -> Path:
     return out
 
 
-def make_bear_reference_preview(server: str, seed: int) -> Path:
+def make_bear_reference_preview(server: str, seed: int,
+                                style_ref: Path | None = None,
+                                use_sd15: bool = False) -> Path:
     """Generate a front-facing reference and build a preview sheet that repeats it."""
-    ref = make_bear_reference(server, seed)
+    ref = make_bear_reference(server, seed, direction="down", style_ref=style_ref, use_sd15=use_sd15)
+    return _make_preview_sheet_from_ref(ref)
 
-    # Build a 128x128 cell from the 512x512 reference.
+
+def make_bear_reference_preview_with_ref(ref: Path) -> Path:
+    """Build a preview sheet from an already-generated reference file."""
+    return _make_preview_sheet_from_ref(ref)
+
+
+def _make_preview_sheet_from_ref(ref: Path) -> Path:
+    """Tile a 512x512 reference into a 4x8 preview sheet."""
     with Image.open(ref).convert("RGBA") as img:
         cell = 128
         scale = cell / max(img.size)
@@ -656,6 +787,11 @@ def main() -> None:
     parser.add_argument("--promote", action="store_true", help="Copy previews to active asset folders")
     parser.add_argument("--no-lora", action="store_true", help="Use CartoonXL without the Voxel XL LoRA (not voxel style)")
     parser.add_argument("--lora-weight", type=float, default=None, help="Override Voxel XL LoRA strength (default 0.6)")
+    parser.add_argument("--sd15", action="store_true", help="Use the SD 1.5 checkpoint instead of CartoonXL SDXL for bear generation")
+    parser.add_argument("--style-ref", type=Path, default=None, help="Image to use as an img2img style/outfit reference for bear generation")
+    parser.add_argument("--bfl", action="store_true", help="Use the Black Forest Labs FLUX API instead of ComfyUI")
+    parser.add_argument("--bfl-model", default="flux-pro-1.1", help="BFL model to use (default: flux-pro-1.1)")
+    parser.add_argument("--bfl-api-key", default=None, help="BFL API key (defaults to BFL_API_KEY env var)")
     args = parser.parse_args()
 
     if args.no_lora:
@@ -669,40 +805,53 @@ def main() -> None:
         promote()
         return
 
-    if not args.no_lora:
-        require_lora(args.server)
+    bfl_api_key = args.bfl_api_key or os.environ.get("BFL_API_KEY")
 
-    jobs: list[str] = []
-    if args.preview_all:
-        jobs.extend(ASSETS.keys())
-    elif args.preview:
-        jobs.append(args.preview)
+    if not args.bfl:
+        if not args.no_lora:
+            require_lora(args.server)
 
-    for key in jobs:
-        try:
-            generate_single(args.server, key, args.seed)
-        except Exception as exc:
-            print(f"[{key}] failed: {exc}", file=sys.stderr)
-            sys.exit(1)
+        jobs: list[str] = []
+        if args.preview_all:
+            jobs.extend(ASSETS.keys())
+        elif args.preview:
+            jobs.append(args.preview)
+
+        for key in jobs:
+            try:
+                generate_single(args.server, key, args.seed)
+            except Exception as exc:
+                print(f"[{key}] failed: {exc}", file=sys.stderr)
+                sys.exit(1)
 
     if args.preview_bear:
+        if args.bfl and not bfl_api_key:
+            print("ERROR: --bfl requires --bfl-api-key or BFL_API_KEY env var", file=sys.stderr)
+            sys.exit(1)
         try:
+            server = None if args.bfl else args.server
             # Generate a direction-specific reference for each cardinal direction so the
             # silhouettes actually read as up/right/down/left in the final sheet.
             refs: dict[str, Path] = {}
             for d in ["up", "right", "down", "left"]:
-                refs[d] = make_bear_reference(args.server, args.seed, direction=d)
+                refs[d] = make_bear_reference(
+                    server, args.seed, direction=d,
+                    style_ref=args.style_ref, use_sd15=args.sd15,
+                    bfl_api_key=bfl_api_key, bfl_model=args.bfl_model,
+                )
 
             directions: dict[str, list[Path]] = {}
             for d in ["up", "right", "down", "left"]:
                 # Two alternating walk poses per direction, guided by the matching direction reference.
                 pose_a = make_bear_direction(
                     args.server, d, refs[d], args.seed + hash(d) % 100000,
-                    pose="left leg forward, right leg back, left arm back, right arm forward"
+                    pose="left leg forward, right leg back, left arm back, right arm forward",
+                    use_sd15=args.sd15,
                 )
                 pose_b = make_bear_direction(
                     args.server, d, refs[d], args.seed + hash(d) % 100000 + 50000,
-                    pose="right leg forward, left leg back, right arm back, left arm forward"
+                    pose="right leg forward, left leg back, right arm back, left arm forward",
+                    use_sd15=args.sd15,
                 )
                 directions[d] = [pose_a, pose_b]
             assemble_bear_sheet(directions)
@@ -711,8 +860,17 @@ def main() -> None:
             sys.exit(1)
 
     if args.preview_bear_ref:
+        if args.bfl and not bfl_api_key:
+            print("ERROR: --bfl requires --bfl-api-key or BFL_API_KEY env var", file=sys.stderr)
+            sys.exit(1)
         try:
-            make_bear_reference_preview(args.server, args.seed)
+            server = None if args.bfl else args.server
+            ref = make_bear_reference(
+                server, args.seed, direction="down",
+                style_ref=args.style_ref, use_sd15=args.sd15,
+                bfl_api_key=bfl_api_key, bfl_model=args.bfl_model,
+            )
+            make_bear_reference_preview_with_ref(ref)
         except Exception as exc:
             print(f"[bear-reference-preview] failed: {exc}", file=sys.stderr)
             sys.exit(1)
