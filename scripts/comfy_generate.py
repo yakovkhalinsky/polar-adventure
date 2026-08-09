@@ -1349,7 +1349,7 @@ def make_bear_layerdiffuse(server: str, seed: int = 1337) -> Path:
         download_image(server, img["filename"], img.get("subfolder", ""), out)
         directions[direction].append(out)
 
-    return assemble_bear_sheet(directions, rows=4, hard_alpha=True)
+    return assemble_bear_sheet(directions, rows=4, hard_alpha=False)
 
 
 def _make_preview_sheet_from_ref(ref: Path, rows: int = 8) -> Path:
