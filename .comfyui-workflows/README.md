@@ -21,6 +21,18 @@ Run this PowerShell script **on your Windows PC** to install the recommended mod
 .\setup_windows_comfyui.ps1
 ```
 
+The script defaults to the ComfyUI Desktop install path:
+
+```text
+C:\Users\yakov\AppData\Local\Comfy-Desktop\ComfyUI-Installs\ComfyUI\ComfyUI
+```
+
+If your install is elsewhere, pass the path:
+
+```powershell
+.\setup_windows_comfyui.ps1 -ComfyUiPath "C:\Path\To\Your\ComfyUI"
+```
+
 It downloads:
 
 - SD 1.5 base checkpoint (`v1-5-pruned-emaonly.safetensors`)
@@ -69,13 +81,13 @@ If you prefer to work directly in the ComfyUI Desktop app, import one of these w
 
 | File | Purpose |
 |------|---------|
-| `polar_bear_walk_v1.json` | Single polar bear front-view frame. Good for testing your model stack. |
-| `polar_bear_walk_16frame.json` | Template for a full 16-frame walk cycle. Duplicate the prompt/sampler/save chain for each direction and pose. |
+| `polar_bear_single_sd15.json` | Single-frame SD 1.5 polar bear for testing your model stack. |
+| `polar_bear_single_turbo.json` | Single-frame z-image-turbo polar bear if you want to keep the AuraFlow stack. |
+| `polar_bear_walk_v1.json` | Older single-frame test workflow. |
+| `polar_bear_walk_16frame.json` | Template for a full 16-frame walk cycle. |
 
-Both workflows expect:
-
-- `v1-5-pruned-emaonly.safetensors`
-- An isometric/pixel-art LoRA (edit the `LoraLoader` widget to match your filename)
+The SD 1.5 single-frame workflow expects only `v1-5-pruned-emaonly.safetensors`.
+The 16-frame and v1 workflows work best with an isometric/pixel-art LoRA loaded.
 
 ## What gets generated
 

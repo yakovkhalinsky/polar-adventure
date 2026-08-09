@@ -4,12 +4,12 @@
     Downloads the recommended model stack for Polar Adventures into a local ComfyUI Desktop install.
 
 .DESCRIPTION
-    This script checks for ComfyUI Desktop in the standard Windows location, then downloads the
-    SD 1.5 checkpoint, VAE, isometric LoRAs, ControlNet models, and installs the custom nodes
-    needed by the polar-adventures asset pipeline.
+    This script checks for ComfyUI Desktop in the default Electron install location, then
+    downloads the SD 1.5 checkpoint, VAE, isometric LoRAs, ControlNet models, and installs
+    the custom nodes needed by the polar-adventures asset pipeline.
 
 .PARAMETER ComfyUiPath
-    Path to your ComfyUI Desktop folder. Defaults to the standard Windows Desktop location.
+    Path to your ComfyUI Desktop folder. Defaults to the ComfyUI Desktop Electron install.
 
 .PARAMETER SkipModels
     Skip downloading model files (useful if you only want to install custom nodes).
@@ -21,10 +21,10 @@
     .\setup_windows_comfyui.ps1
 
 .EXAMPLE
-    .\setup_windows_comfyui.ps1 -ComfyUiPath "C:\Users\Yakov\Documents\ComfyUI"
+    .\setup_windows_comfyui.ps1 -ComfyUiPath "C:\Users\yakov\AppData\Local\Comfy-Desktop\ComfyUI-Installs\ComfyUI\ComfyUI"
 #>
 param(
-    [string]$ComfyUiPath = "$env:USERPROFILE\Documents\ComfyUI",
+    [string]$ComfyUiPath = "$env:LOCALAPPDATA\Comfy-Desktop\ComfyUI-Installs\ComfyUI\ComfyUI",
     [switch]$SkipModels,
     [switch]$SkipNodes
 )
