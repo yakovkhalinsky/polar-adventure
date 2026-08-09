@@ -58,6 +58,12 @@ async function main(): Promise<void> {
     }
   } catch (err) {
     console.error('Failed to load game assets:', err);
+    const overlay = document.getElementById('error-overlay');
+    if (overlay) {
+      overlay.style.display = 'block';
+      const message = err instanceof Error ? `${err.name}: ${err.message}\n${err.stack || ''}` : String(err);
+      overlay.textContent = `CAUGHT ERROR:\n${message}`;
+    }
   }
 }
 
