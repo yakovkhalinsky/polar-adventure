@@ -156,20 +156,25 @@
       refUp: 'assets/generated/characters/bear-reference-up.png',
     };
 
-    function setImg(id, src) {
+    function setImg(id, metaId, src) {
       const el = document.getElementById(id);
-      if (el) el.src = src + cacheBust;
+      const meta = document.getElementById(metaId);
+      if (!el) return;
+      el.onerror = () => {
+        el.style.display = 'none';
+        if (meta) meta.textContent = 'not generated yet';
+      };
+      el.onload = () => {
+        el.style.display = '';
+      };
+      el.src = src + cacheBust;
+      if (meta) meta.textContent = src;
     }
 
-    setImg('ref-down', paths.refDown);
-    setImg('ref-left', paths.refLeft);
-    setImg('ref-right', paths.refRight);
-    setImg('ref-up', paths.refUp);
-
-    document.getElementById('ref-down-meta').textContent = paths.refDown;
-    document.getElementById('ref-left-meta').textContent = paths.refLeft;
-    document.getElementById('ref-right-meta').textContent = paths.refRight;
-    document.getElementById('ref-up-meta').textContent = paths.refUp;
+    setImg('ref-down', 'ref-down-meta', paths.refDown);
+    setImg('ref-left', 'ref-left-meta', paths.refLeft);
+    setImg('ref-right', 'ref-right-meta', paths.refRight);
+    setImg('ref-up', 'ref-up-meta', paths.refUp);
 
     // Spritesheet preview stage
     const canvas = document.getElementById('stage');
@@ -196,6 +201,13 @@
         frame = (frame + 1) % cols;
         draw();
       }, 250);
+    };
+    img.onerror = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#9ca3af';
+      ctx.font = '1rem system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('Spritesheet not assembled yet', canvas.width / 2, canvas.height / 2);
     };
 
     document.querySelectorAll('.controls button').forEach(btn => {

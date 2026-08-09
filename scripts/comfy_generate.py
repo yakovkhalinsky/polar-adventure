@@ -23,7 +23,7 @@ from urllib.parse import urljoin
 
 import numpy as np
 import requests
-from PIL import Image
+from PIL import Image, ImageFilter
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "public/assets"
@@ -391,22 +391,101 @@ def bfl_download_image(result: dict[str, Any], dest: Path) -> None:
     print(f"  downloaded {dest}")
 
 
-def isolate_largest_sprite(img: Image.Image, target_size: int, raw_path: Path | None = None) -> Image.Image:
-    """Crop to the largest foreground region and make the background transparent.
+def _isolate_white_bg_sprite(img: Image.Image) -> Image.Image:
+    """Remove a near-pure white background using connected components + morphology.
 
-    Uses a flood fill from the image borders with an adaptive color tolerance.
-    This handles solid backgrounds, gradients, and slight vignetting better than
-    corner sampling alone.
+    Best for BFL/FLUX images that come back with a clean white studio background.
+    Keeps the largest foreground subject and fills internal holes.
     """
     rgba = img.convert("RGBA")
-    if raw_path is not None:
-        raw_path.parent.mkdir(parents=True, exist_ok=True)
-        rgba.save(raw_path)
+    arr = np.array(rgba).astype(np.float32)
+    height, width, _ = arr.shape
+    rgb = arr[:, :, :3]
 
+    # Conservative threshold: only very light greys / white count as background.
+    bg_mask = (rgb[:, :, 0] > 245) & (rgb[:, :, 1] > 245) & (rgb[:, :, 2] > 245)
+    subject_mask = ~bg_mask
+
+    # Dilate to bridge narrow gaps in white fur, then erode to tighten edges.
+    mask_img = Image.fromarray((subject_mask * 255).astype(np.uint8))
+    mask_img = mask_img.filter(ImageFilter.MaxFilter(7))
+    mask_img = mask_img.filter(ImageFilter.MinFilter(5))
+    mask = np.array(mask_img) > 128
+
+    # Keep only the largest connected component.
+    visited = np.zeros((height, width), bool)
+    largest: list[tuple[int, int]] = []
+    q: deque[tuple[int, int]] = deque()
+    for y in range(height):
+        for x in range(width):
+            if mask[y, x] and not visited[y, x]:
+                comp: list[tuple[int, int]] = []
+                visited[y, x] = True
+                q.append((y, x))
+                while q:
+                    cy, cx = q.popleft()
+                    comp.append((cy, cx))
+                    for dy in (-1, 0, 1):
+                        for dx in (-1, 0, 1):
+                            if dy == 0 and dx == 0:
+                                continue
+                            ny, nx = cy + dy, cx + dx
+                            if 0 <= ny < height and 0 <= nx < width:
+                                if mask[ny, nx] and not visited[ny, nx]:
+                                    visited[ny, nx] = True
+                                    q.append((ny, nx))
+                if len(comp) > len(largest):
+                    largest = comp
+
+    if not largest:
+        return rgba
+
+    keep = np.zeros((height, width), bool)
+    for y, x in largest:
+        keep[y, x] = True
+
+    # Fill holes by flood-filling background from the image border.
+    holes = np.zeros((height, width), bool)
+    for y in range(height):
+        for x in (0, width - 1):
+            if not keep[y, x] and not holes[y, x]:
+                holes[y, x] = True
+                q.append((y, x))
+    for x in range(width):
+        for y in (0, height - 1):
+            if not keep[y, x] and not holes[y, x]:
+                holes[y, x] = True
+                q.append((y, x))
+    while q:
+        y, x = q.popleft()
+        for dy in (-1, 0, 1):
+            for dx in (-1, 0, 1):
+                if dy == 0 and dx == 0:
+                    continue
+                ny, nx = y + dy, x + dx
+                if 0 <= ny < height and 0 <= nx < width:
+                    if not keep[ny, nx] and not holes[ny, nx]:
+                        holes[ny, nx] = True
+                        q.append((ny, nx))
+
+    keep = ~holes
+
+    # Small final smoothing to remove white fringe artifacts.
+    mask_img = Image.fromarray((keep * 255).astype(np.uint8))
+    mask_img = mask_img.filter(ImageFilter.MaxFilter(3))
+    mask_img = mask_img.filter(ImageFilter.MinFilter(3))
+    keep = np.array(mask_img) > 128
+
+    arr[~keep, 3] = 0
+    return Image.fromarray(arr.astype(np.uint8))
+
+
+def _isolate_unknown_bg_sprite(img: Image.Image) -> Image.Image:
+    """Remove a non-white/colored/gradient background via adaptive flood fill."""
+    rgba = img.convert("RGBA")
     arr = np.array(rgba).astype(np.float32)
     height, width, _ = arr.shape
 
-    # Gather border pixels and use their median color as the background seed.
     border: list[np.ndarray] = []
     for x in range(width):
         border.append(arr[0, x, :3])
@@ -416,12 +495,9 @@ def isolate_largest_sprite(img: Image.Image, target_size: int, raw_path: Path | 
         border.append(arr[y, width - 1, :3])
     border_arr = np.array(border)
     seed = np.median(border_arr, axis=0)
-
-    # Adaptive tolerance: cover normal variation plus a generous margin.
     mad = np.median(np.abs(border_arr - seed).sum(axis=1))
     tol = max(55, int(mad * 3.0))
 
-    # Flood fill the background from every edge pixel that matches the seed.
     bg = np.zeros((height, width), bool)
     q: deque[tuple[int, int]] = deque()
     for y in range(height):
@@ -446,15 +522,48 @@ def isolate_largest_sprite(img: Image.Image, target_size: int, raw_path: Path | 
                         q.append((ny, nx))
 
     arr[bg, 3] = 0
+    return Image.fromarray(arr.astype(np.uint8))
+
+
+def isolate_largest_sprite(img: Image.Image, target_size: int, raw_path: Path | None = None) -> Image.Image:
+    """Crop to the largest foreground region and make the background transparent.
+
+    Auto-detects a near-pure white background (typical of BFL/FLUX output) and uses
+    a fast morphological mask. Falls back to adaptive flood fill for colored/gradient
+    backgrounds (typical of ComfyUI output).
+    """
+    rgba = img.convert("RGBA")
+    if raw_path is not None:
+        raw_path.parent.mkdir(parents=True, exist_ok=True)
+        rgba.save(raw_path)
+
+    arr = np.array(rgba).astype(np.float32)
+    height, width, _ = arr.shape
+
+    # Decide strategy from the border pixels.
+    border: list[np.ndarray] = []
+    for x in range(width):
+        border.append(arr[0, x, :3])
+        border.append(arr[height - 1, x, :3])
+    for y in range(height):
+        border.append(arr[y, 0, :3])
+        border.append(arr[y, width - 1, :3])
+    border_arr = np.array(border)
+    mostly_white = np.all(border_arr > 250, axis=1).mean() > 0.95
+
+    if mostly_white:
+        isolated = _isolate_white_bg_sprite(rgba)
+    else:
+        isolated = _isolate_unknown_bg_sprite(rgba)
 
     # Crop to the non-transparent bounding box.
-    alpha = arr[:, :, 3]
+    alpha = np.array(isolated.split()[-1])
     coords = np.argwhere(alpha > 0)
     if len(coords) == 0:
         return Image.new("RGBA", (target_size, target_size), (255, 255, 255, 0))
     y1, x1 = coords.min(axis=0)
     y2, x2 = coords.max(axis=0) + 1
-    crop = Image.fromarray(arr.astype(np.uint8)).crop((x1, y1, x2, y2))
+    crop = isolated.crop((x1, y1, x2, y2))
 
     # Scale to fit inside target with padding.
     scale = target_size / max(crop.size) * 0.85
@@ -520,10 +629,10 @@ def make_bear_reference(server: str | None, seed: int, size: int = 512,
         "left": "side view facing left, walking to the left, profile view",
     }
     prompt = (
-        "anthropomorphic adult male polar bear character, Minecraft voxel style, blocky, "
-        "muscular humanoid build, broad muscular shoulders, thick arms, strong stocky body, "
+        "anthropomorphic adult male polar bear character, smooth 3D rendered style, soft realistic shading, "
+        "detailed fabric texture, muscular humanoid build, broad muscular shoulders, thick arms, strong stocky body, "
         "wearing a solid grey hoodie with drawstrings and plain blue denim jeans with no rips, "
-        "white fur, black and white high-top sneakers like Converse, no gloves, bare paws, no headband, "
+        "white fur, black and white high-top sneakers like Converse Chuck Taylors, bare hands with visible claws, no gloves, no headband, "
         f"{direction_prompts[direction]}, "
         "pure white background, isolated character, centered, "
         "no text, no watermark, no border"
@@ -590,10 +699,10 @@ def make_bear_direction(server: str, direction: str, reference: Path, seed: int,
         "down": "front view walking toward viewer, facing camera, upright humanoid posture",
     }
     prompt = (
-        "anthropomorphic adult male polar bear character, same Minecraft voxel design and outfit as reference, "
-        "muscular humanoid build, broad muscular shoulders, thick arms, strong stocky body, "
+        "anthropomorphic adult male polar bear character, same smooth 3D design and outfit as reference, "
+        "soft realistic shading, detailed fabric texture, muscular humanoid build, broad muscular shoulders, thick arms, strong stocky body, "
         "wearing a solid grey hoodie with drawstrings and plain blue denim jeans with no rips, "
-        "white fur, black and white high-top sneakers like Converse, no gloves, bare paws, no headband, "
+        "white fur, black and white high-top sneakers like Converse Chuck Taylors, bare hands with visible claws, no gloves, no headband, "
         f"{directions[direction]}, {pose}, "
         "pure white background, isolated character, centered, "
         "no text, no watermark, no border"
