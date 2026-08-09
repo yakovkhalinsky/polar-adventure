@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Polar Bear Spritesheet Preview</title>
+    <style>
+      * { box-sizing: border-box; }
+      html, body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        min-height: 100%;
+        background: #0b1d2e;
+        color: #e6f7ff;
+        font-family: system-ui, sans-serif;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 1rem;
+        padding: 1rem;
+      }
+      h1 { margin: 0; font-size: 1.25rem; }
+      .controls {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+      button {
+        background: #1a3a5c;
+        color: #e6f7ff;
+        border: 1px solid #4a7fc1;
+        border-radius: 0.4rem;
+        padding: 0.4rem 0.8rem;
+        cursor: pointer;
+      }
+      button.active { background: #4a7fc1; }
+      .stage {
+        position: relative;
+        width: 256px;
+        height: 256px;
+        background: repeating-conic-gradient(#142f4a 0% 25%, #0b1d2e 0% 50%) 50% / 32px 32px;
+        border: 2px solid #4a7fc1;
+        border-radius: 0.5rem;
+        image-rendering: pixelated;
+      }
+      .stage canvas {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+      .info {
+        font-size: 0.85rem;
+        opacity: 0.8;
+      }
+      .sheet {
+        max-width: 100%;
+        border: 2px solid #4a7fc1;
+        border-radius: 0.5rem;
+        background: #142f4a;
+        image-rendering: pixelated;
+      }
+      .row-labels {
+        display: grid;
+        grid-template-columns: repeat(4, 128px);
+        gap: 0;
+        text-align: center;
+        font-size: 0.75rem;
+        margin-top: 0.25rem;
+      }
+      .legend {
+        display: grid;
+        grid-template-columns: auto auto;
+        gap: 0.25rem 1rem;
+        font-size: 0.8rem;
+        background: #142f4a;
+        padding: 0.75rem;
+        border-radius: 0.4rem;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Polar Bear Spritesheet Preview</h1>
+    <div class="controls" id="controls"></div>
+    <div class="stage"><canvas id="stage" width="128" height="128"></canvas></div>
+    <div class="info" id="info">idle-breathe | frame 0</div>
+    <img class="sheet" id="sheet" alt="full spritesheet" />
+    <div class="legend" id="legend"></div>
+
+    <script>
+      const ROWS = [
+        { name: 'walk-up', label: 'walk up' },
+        { name: 'walk-right', label: 'walk right' },
+        { name: 'walk-down', label: 'walk down' },
+        { name: 'walk-left', label: 'walk left' },
+        { name: 'swim', label: 'swim' },
+        { name: 'attack', label: 'attack' },
+        { name: 'push', label: 'push' },
+        { name: 'idle-breathe', label: 'idle breathe' },
+      ];
+      const FPS = 8;
+      const FRAME_SIZE = 128;
+      const COLS = 4;
+
+      const sheetImg = document.getElementById('sheet');
+      const stage = document.getElementById('stage');
+      const ctx = stage.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
+
+      let sheet = null;
+      let currentRow = 7; // idle-breathe
+      let frame = 0;
+      let direction = 1;
+      let lastTime = 0;
+
+      const image = new Image();
+      image.src = 'assets/characters/polar-bear.png';
+      image.onload = () => {
+        sheet = image;
+        sheetImg.src = image.src;
+        requestAnimationFrame(loop);
+      };
+      image.onerror = () => {
+        document.getElementById('info').textContent = 'Failed to load spritesheet.';
+      };
+
+      const controls = document.getElementById('controls');
+      ROWS.forEach((row, idx) => {
+        const btn = document.createElement('button');
+        btn.textContent = row.label;
+        btn.dataset.row = idx;
+        btn.onclick = () => setRow(idx);
+        controls.appendChild(btn);
+      });
+
+      const legend = document.getElementById('legend');
+      ROWS.forEach((row, idx) => {
+        const num = document.createElement('div');
+        num.textContent = `row ${idx}`;
+        const name = document.createElement('div');
+        name.textContent = row.label;
+        legend.appendChild(num);
+        legend.appendChild(name);
+      });
+
+      function setRow(idx) {
+        currentRow = idx;
+        frame = 0;
+        direction = 1;
+        updateButtons();
+      }
+
+      function updateButtons() {
+        for (const btn of controls.children) {
+          btn.classList.toggle('active', parseInt(btn.dataset.row, 10) === currentRow);
+        }
+      }
+
+      function loop(time) {
+        if (!sheet) {
+          requestAnimationFrame(loop);
+          return;
+        }
+        const dt = time - lastTime;
+        if (dt > 1000 / FPS) {
+          lastTime = time;
+          if (ROWS[currentRow].name === 'idle-breathe') {
+            // ping-pong
+            frame += direction;
+            if (frame >= COLS - 1) { frame = COLS - 1; direction = -1; }
+            if (frame <= 0) { frame = 0; direction = 1; }
+          } else {
+            frame = (frame + 1) % COLS;
+          }
+        }
+
+        ctx.clearRect(0, 0, stage.width, stage.height);
+        ctx.drawImage(
+          sheet,
+          frame * FRAME_SIZE,
+          currentRow * FRAME_SIZE,
+          FRAME_SIZE,
+          FRAME_SIZE,
+          0, 0,
+          stage.width,
+          stage.height
+        );
+
+        document.getElementById('info').textContent = `${ROWS[currentRow].label} | frame ${frame}`;
+        requestAnimationFrame(loop);
+      }
+
+      updateButtons();
+    </script>
+  </body>
+</html>
