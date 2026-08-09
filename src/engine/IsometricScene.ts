@@ -11,8 +11,8 @@ export class IsometricScene {
   readonly renderer: THREE.WebGLRenderer;
 
   private parent: HTMLElement;
-  private designWidth = 1024;
-  private designHeight = 768;
+  readonly designWidth = 1024;
+  readonly designHeight = 768;
   private zoom = 1;
 
   constructor(parentId: string) {

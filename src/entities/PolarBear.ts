@@ -69,6 +69,10 @@ export class PolarBear {
     this.shadow.setPosition(x, this.groundY, 0.1);
   }
 
+  getPosition(): THREE.Vector3 {
+    return this.pos.clone();
+  }
+
   update(dt: number, keys: Set<string>): void {
     const seconds = dt / 1000;
     let vx = 0;

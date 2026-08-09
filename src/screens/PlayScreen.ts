@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { IsometricScene } from '../engine/IsometricScene.ts';
 import { TileMap } from '../engine/TileMap.ts';
 import { DepthSorter } from '../engine/DepthSorter.ts';
+import { CameraController } from '../engine/CameraController.ts';
 import { PolarBear } from '../entities/PolarBear.ts';
 
 const TILE_WIDTH = 64;
@@ -10,13 +11,15 @@ const GRID_SIZE = 12;
 
 /**
  * The main gameplay screen. Sets up an isometric tile grid, spawns the polar
- * bear, and drives the render loop.
+ * bear, drives the render loop, and keeps the camera smoothly following the
+ * player.
  */
 export class PlayScreen {
   private scene: IsometricScene;
   private worldRoot: THREE.Object3D;
   private tileMap: TileMap | null = null;
   private player: PolarBear | null = null;
+  private camera: CameraController | null = null;
   private sorter: DepthSorter;
   private keys = new Set<string>();
   private running = true;
@@ -57,8 +60,15 @@ export class PlayScreen {
     const { x, y } = this.tileMap.cartesianToIsometric(0, 0);
     this.player.setPosition(x, y);
 
-    // Fit camera to the grid.
+    // Initial zoom to frame the grid, then a smooth follow camera.
     this.fitCamera();
+    this.camera = new CameraController(
+      this.worldRoot,
+      this.scene.designWidth,
+      this.scene.designHeight,
+      { bounds: this.tileMap.bounds }
+    );
+    this.camera.snapTo(x, y);
 
     // Input.
     window.addEventListener('keydown', this.handleKeyDown);
@@ -80,13 +90,18 @@ export class PlayScreen {
 
     this.player?.update(16.67, this.keys); // fixed 60fps dt for stability
 
+    if (this.player) {
+      const pos = this.player.getPosition();
+      this.camera?.setTarget(pos.x, pos.y);
+    }
+    this.camera?.update(16.67);
+
     if (this.player && this.tileMap) {
       this.sorter.sort([
         ...this.tileMap.tiles,
         this.player.shadow,
         this.player.character,
       ]);
-
     }
 
     this.scene.render();
@@ -94,14 +109,14 @@ export class PlayScreen {
   };
 
   private handleKeyDown = (e: KeyboardEvent): void => {
-    this.mapKey(e.code, true);
+    this.mapKey(e, true);
   };
 
   private handleKeyUp = (e: KeyboardEvent): void => {
-    this.mapKey(e.code, false);
+    this.mapKey(e, false);
   };
 
-  private mapKey(code: string, pressed: boolean): void {
+  private mapKey(e: KeyboardEvent, pressed: boolean): void {
     const map: Record<string, string> = {
       ArrowLeft: 'left',
       KeyA: 'left',
@@ -114,12 +129,12 @@ export class PlayScreen {
       Space: 'jump',
     };
 
-    const action = map[code];
+    const action = map[e.code];
     if (!action) return;
 
     // Prevent page scroll on arrow keys and space.
-    if (action !== 'jump') {
-      // handled by preventDefault below for arrows only
+    if (['left', 'right', 'up', 'down', 'jump'].includes(action)) {
+      e.preventDefault();
     }
 
     if (pressed) {
@@ -132,13 +147,12 @@ export class PlayScreen {
   private fitCamera(): void {
     if (!this.tileMap) return;
 
-    const centerX = (this.tileMap.bounds.min.x + this.tileMap.bounds.max.x) / 2;
-    const centerY = (this.tileMap.bounds.min.y + this.tileMap.bounds.max.y) / 2;
-    this.worldRoot.position.set(-centerX, -centerY, 0);
-
     const worldWidth = this.tileMap.bounds.max.x - this.tileMap.bounds.min.x;
     const worldHeight = this.tileMap.bounds.max.y - this.tileMap.bounds.min.y;
-    const zoom = Math.min(1024 / worldWidth, 768 / worldHeight) * 0.85;
+    const zoom = Math.min(
+      this.scene.designWidth / worldWidth,
+      this.scene.designHeight / worldHeight
+    ) * 0.85;
     this.scene.setZoom(zoom);
   }
 }
