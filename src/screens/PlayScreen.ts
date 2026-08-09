@@ -1,18 +1,19 @@
 import * as THREE from 'three';
 import { IsometricScene } from '../engine/IsometricScene.ts';
-import { TileMap } from '../engine/TileMap.ts';
+import { TileMap, TileType } from '../engine/TileMap.ts';
 import { DepthSorter } from '../engine/DepthSorter.ts';
 import { CameraController } from '../engine/CameraController.ts';
+import { WorldObject } from '../engine/WorldObject.ts';
 import { PolarBear } from '../entities/PolarBear.ts';
 
 const TILE_WIDTH = 64;
 const TILE_HEIGHT = 32;
-const GRID_SIZE = 12;
+const GRID_SIZE = 24;
 
 /**
  * The main gameplay screen. Sets up an isometric tile grid, spawns the polar
- * bear, drives the render loop, and keeps the camera smoothly following the
- * player.
+ * bear, places obstacles and decorations, drives the render loop, and keeps the
+ * camera smoothly following the player.
  */
 export class PlayScreen {
   private scene: IsometricScene;
@@ -23,12 +24,12 @@ export class PlayScreen {
   private sorter: DepthSorter;
   private keys = new Set<string>();
   private running = true;
+  private objects: WorldObject[] = [];
 
   private textures: {
     polarBear: THREE.Texture;
-    snow: THREE.Texture;
-    ice: THREE.Texture;
-    iceCracks: THREE.Texture;
+    tiles: Record<TileType, THREE.Texture>;
+    objects: Record<string, THREE.Texture>;
   };
 
   constructor(textures: PlayScreen['textures']) {
@@ -44,13 +45,11 @@ export class PlayScreen {
       size: GRID_SIZE,
       tileWidth: TILE_WIDTH,
       tileHeight: TILE_HEIGHT,
-      textures: {
-        snow: this.textures.snow,
-        ice: this.textures.ice,
-        iceCracks: this.textures.iceCracks,
-      },
+      textures: this.textures.tiles,
     });
     this.tileMap.addTo(this.worldRoot);
+
+    this.spawnObjects();
 
     this.player = new PolarBear(this.textures.polarBear);
     this.worldRoot.add(this.player.character.sprite);
@@ -59,6 +58,7 @@ export class PlayScreen {
     // Center player on the grid.
     const { x, y } = this.tileMap.cartesianToIsometric(0, 0);
     this.player.setPosition(x, y);
+    this.player.setCollisionContext(this.tileMap, this.objects);
 
     // Initial zoom to frame the grid, then a smooth follow camera.
     this.fitCamera();
@@ -85,6 +85,62 @@ export class PlayScreen {
     this.scene.dispose();
   }
 
+  private spawnObjects(): void {
+    if (!this.tileMap) return;
+
+    const half = Math.floor(GRID_SIZE / 2);
+    const rng = seededRng(42);
+    const objectTypes = [
+      { key: 'rock', width: 48, height: 40, radius: 18 },
+      { key: 'iceberg', width: 56, height: 72, radius: 20 },
+      { key: 'tree', width: 48, height: 72, radius: 16 },
+      { key: 'snowMound', width: 40, height: 24, radius: 12 },
+    ];
+
+    // Place a ring of water around the outer edges and scattered objects inside.
+    for (const tile of this.tileMap.tiles) {
+      // Skip the starting area around (0,0).
+      if (Math.abs(tile.col - half) <= 2 && Math.abs(tile.row - half) <= 2) {
+        continue;
+      }
+
+      // Border water.
+      const distFromEdge = Math.min(
+        tile.col,
+        tile.row,
+        GRID_SIZE - 1 - tile.col,
+        GRID_SIZE - 1 - tile.row
+      );
+      if (distFromEdge <= 1) {
+        if (rng() > 0.3) {
+          tile.type = 'water';
+          tile.blocked = true;
+          // Swap texture.
+          (tile.sprite.sprite.material as THREE.SpriteMaterial).map = this.textures.tiles.water;
+        }
+        continue;
+      }
+
+      // Random decorations on snow/ice tiles.
+      if (tile.type === 'snow' || tile.type === 'ice') {
+        if (rng() < 0.04) {
+          const type = objectTypes[Math.floor(rng() * objectTypes.length)];
+          const obj = new WorldObject({
+            x: tile.x,
+            y: tile.y,
+            width: type.width,
+            height: type.height,
+            texture: this.textures.objects[type.key],
+            blocked: type.key !== 'snowMound',
+            blockRadius: type.radius,
+          });
+          this.objects.push(obj);
+          this.worldRoot.add(obj.sprite.sprite);
+        }
+      }
+    }
+  }
+
   private loop = (_time: number): void => {
     if (!this.running) return;
 
@@ -98,7 +154,8 @@ export class PlayScreen {
 
     if (this.player && this.tileMap) {
       this.sorter.sort([
-        ...this.tileMap.tiles,
+        ...this.tileMap.tiles.map((t) => t.sprite),
+        ...this.objects.map((o) => o.sprite),
         this.player.shadow,
         this.player.character,
       ]);
@@ -155,4 +212,12 @@ export class PlayScreen {
     ) * 0.85;
     this.scene.setZoom(zoom);
   }
+}
+
+function seededRng(seed: number): () => number {
+  let s = seed;
+  return () => {
+    s = Math.sin(s * 12.9898 + 78.233) * 43758.5453;
+    return s - Math.floor(s);
+  };
 }

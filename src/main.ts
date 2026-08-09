@@ -12,18 +12,32 @@ function loadTexture(url: string): Promise<THREE.Texture> {
 
 async function main(): Promise<void> {
   try {
-    const [polarBear, snow, ice, iceCracks] = await Promise.all([
-      loadTexture('assets/characters/polar-bear.png'),
-      loadTexture('assets/tiles/snow.png'),
-      loadTexture('assets/tiles/ice.png'),
-      loadTexture('assets/tiles/ice-cracks.png'),
-    ]);
-
-    const game = new PlayScreen({
+    const [
       polarBear,
       snow,
       ice,
       iceCracks,
+      water,
+      rock,
+      iceberg,
+      tree,
+      snowMound,
+    ] = await Promise.all([
+      loadTexture('assets/characters/polar-bear.png'),
+      loadTexture('assets/tiles/snow.png'),
+      loadTexture('assets/tiles/ice.png'),
+      loadTexture('assets/tiles/ice-cracks.png'),
+      loadTexture('assets/tiles/water.png'),
+      loadTexture('assets/objects/rock.png'),
+      loadTexture('assets/objects/iceberg.png'),
+      loadTexture('assets/objects/tree.png'),
+      loadTexture('assets/objects/snow-mound.png'),
+    ]);
+
+    const game = new PlayScreen({
+      polarBear,
+      tiles: { snow, ice, iceCracks, water },
+      objects: { rock, iceberg, tree, snowMound },
     });
 
     game.start();

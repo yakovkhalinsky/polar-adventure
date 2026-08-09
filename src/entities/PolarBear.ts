@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { IsometricSprite } from '../engine/IsometricSprite.ts';
 import { SpriteAnimation } from '../engine/SpriteAnimation.ts';
+import { TileMap } from '../engine/TileMap.ts';
+import { WorldObject } from '../engine/WorldObject.ts';
 
 export type Direction = 'up' | 'down' | 'left' | 'right';
 
@@ -8,6 +10,10 @@ const WALK_SPEED = 160;
 const JUMP_VELOCITY = -260;
 const GRAVITY_Y = 800;
 
+/**
+ * Player-controlled polar bear with 4-direction walk animation, idle pose,
+ * jump arc, and a dynamic ground shadow. Respects tile and object collision.
+ */
 export class PolarBear {
   readonly character: IsometricSprite;
   readonly shadow: IsometricSprite;
@@ -19,6 +25,9 @@ export class PolarBear {
   private groundY = 0;
   private pos = new THREE.Vector3();
   private vel = new THREE.Vector3();
+
+  private tileMap: TileMap | null = null;
+  private objects: WorldObject[] = [];
 
   constructor(texture: THREE.Texture) {
     const material = new THREE.SpriteMaterial({
@@ -60,6 +69,11 @@ export class PolarBear {
     this.shadow = new IsometricSprite(shadowMaterial, 36, 14);
     this.shadow.setPosition(0, 0, 0.1);
     this.shadow.sortMode = 'y';
+  }
+
+  setCollisionContext(tileMap: TileMap, objects: WorldObject[]): void {
+    this.tileMap = tileMap;
+    this.objects = objects;
   }
 
   setPosition(x: number, y: number): void {
@@ -107,11 +121,24 @@ export class PolarBear {
       this.updateJump(seconds);
     }
 
-    // Apply velocity.
+    // Try to move; collision prevents entering blocked tiles/objects.
     this.vel.x = vx;
     this.vel.y = this.isJumping ? this.vel.y : vy;
-    this.pos.x += this.vel.x * seconds;
-    this.pos.y += this.vel.y * seconds;
+
+    const nextX = this.pos.x + this.vel.x * seconds;
+    const nextY = this.pos.y + this.vel.y * seconds;
+
+    if (!this.isBlocked(nextX, this.pos.y)) {
+      this.pos.x = nextX;
+    } else {
+      this.vel.x = 0;
+    }
+
+    if (!this.isBlocked(this.pos.x, nextY)) {
+      this.pos.y = nextY;
+    } else {
+      this.vel.y = 0;
+    }
 
     if (!this.isJumping) {
       this.groundY = this.pos.y;
@@ -129,6 +156,18 @@ export class PolarBear {
     // Character floats upward during jump (z is screen height).
     this.character.setPosition(this.pos.x, this.groundY, 0.5 + (this.groundY - this.pos.y));
     this.updateShadow();
+  }
+
+  private isBlocked(x: number, y: number): boolean {
+    if (this.tileMap && this.tileMap.isBlocked(x, y)) {
+      return true;
+    }
+    for (const obj of this.objects) {
+      if (obj.blocksPoint(x, y)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private startJump(): void {
