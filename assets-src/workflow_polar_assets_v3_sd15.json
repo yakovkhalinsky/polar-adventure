@@ -1,0 +1,1166 @@
+{
+  "1": {
+    "inputs": {
+      "ckpt_name": "v1-5-pruned-emaonly.safetensors"
+    },
+    "class_type": "CheckpointLoaderSimple"
+  },
+  "2": {
+    "inputs": {
+      "width": 512,
+      "height": 512,
+      "batch_size": 1
+    },
+    "class_type": "EmptyLatentImage"
+  },
+  "3": {
+    "inputs": {
+      "text": "low quality, blurry, deformed, extra limbs, watermark, signature, text, cropped, worst quality",
+      "clip": [
+        "1",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "10": {
+    "inputs": {
+      "text": "cute polar bear character, chibi proportions, back view, facing away from camera, standing pose, both feet on ground, contact frame, full body visible, white fluffy fur, small black eyes and nose, game sprite, clean vector-like style, soft shading, consistent character design, solid bright lime green background #00ff00, centered, high quality",
+      "clip": [
+        "1",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "11": {
+    "inputs": {
+      "seed": 1000,
+      "steps": 25,
+      "cfg": 7.5,
+      "sampler_name": "dpmpp_2m",
+      "scheduler": "karras",
+      "denoise": 1,
+      "model": [
+        "1",
+        0
+      ],
+      "positive": [
+        "10",
+        0
+      ],
+      "negative": [
+        "3",
+        0
+      ],
+      "latent_image": [
+        "2",
+        0
+      ]
+    },
+    "class_type": "KSampler"
+  },
+  "12": {
+    "inputs": {
+      "samples": [
+        "11",
+        0
+      ],
+      "vae": [
+        "1",
+        2
+      ]
+    },
+    "class_type": "VAEDecode"
+  },
+  "13": {
+    "inputs": {
+      "filename_prefix": "polar_bear_north_f1_unique_north_0",
+      "images": [
+        "12",
+        0
+      ]
+    },
+    "class_type": "SaveImage"
+  },
+  "21": {
+    "inputs": {
+      "text": "cute polar bear character, chibi proportions, back view, facing away from camera, walking, left leg forward, right leg back, mid-stride, full body visible, white fluffy fur, small black eyes and nose, game sprite, clean vector-like style, soft shading, consistent character design, solid bright lime green background #00ff00, centered, high quality",
+      "clip": [
+        "1",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "22": {
+    "inputs": {
+      "seed": 1007,
+      "steps": 25,
+      "cfg": 7.5,
+      "sampler_name": "dpmpp_2m",
+      "scheduler": "karras",
+      "denoise": 1,
+      "model": [
+        "1",
+        0
+      ],
+      "positive": [
+        "21",
+        0
+      ],
+      "negative": [
+        "3",
+        0
+      ],
+      "latent_image": [
+        "2",
+        0
+      ]
+    },
+    "class_type": "KSampler"
+  },
+  "23": {
+    "inputs": {
+      "samples": [
+        "22",
+        0
+      ],
+      "vae": [
+        "1",
+        2
+      ]
+    },
+    "class_type": "VAEDecode"
+  },
+  "24": {
+    "inputs": {
+      "filename_prefix": "polar_bear_north_f2_unique_north_1",
+      "images": [
+        "23",
+        0
+      ]
+    },
+    "class_type": "SaveImage"
+  },
+  "32": {
+    "inputs": {
+      "text": "cute polar bear character, chibi proportions, back view, facing away from camera, standing pose, both feet on ground, contact frame opposite phase, full body visible, white fluffy fur, small black eyes and nose, game sprite, clean vector-like style, soft shading, consistent character design, solid bright lime green background #00ff00, centered, high quality",
+      "clip": [
+        "1",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "33": {
+    "inputs": {
+      "seed": 1014,
+      "steps": 25,
+      "cfg": 7.5,
+      "sampler_name": "dpmpp_2m",
+      "scheduler": "karras",
+      "denoise": 1,
+      "model": [
+        "1",
+        0
+      ],
+      "positive": [
+        "32",
+        0
+      ],
+      "negative": [
+        "3",
+        0
+      ],
+      "latent_image": [
+        "2",
+        0
+      ]
+    },
+    "class_type": "KSampler"
+  },
+  "34": {
+    "inputs": {
+      "samples": [
+        "33",
+        0
+      ],
+      "vae": [
+        "1",
+        2
+      ]
+    },
+    "class_type": "VAEDecode"
+  },
+  "35": {
+    "inputs": {
+      "filename_prefix": "polar_bear_north_f3_unique_north_2",
+      "images": [
+        "34",
+        0
+      ]
+    },
+    "class_type": "SaveImage"
+  },
+  "43": {
+    "inputs": {
+      "text": "cute polar bear character, chibi proportions, back view, facing away from camera, walking, right leg forward, left leg back, mid-stride, full body visible, white fluffy fur, small black eyes and nose, game sprite, clean vector-like style, soft shading, consistent character design, solid bright lime green background #00ff00, centered, high quality",
+      "clip": [
+        "1",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "44": {
+    "inputs": {
+      "seed": 1021,
+      "steps": 25,
+      "cfg": 7.5,
+      "sampler_name": "dpmpp_2m",
+      "scheduler": "karras",
+      "denoise": 1,
+      "model": [
+        "1",
+        0
+      ],
+      "positive": [
+        "43",
+        0
+      ],
+      "negative": [
+        "3",
+        0
+      ],
+      "latent_image": [
+        "2",
+        0
+      ]
+    },
+    "class_type": "KSampler"
+  },
+  "45": {
+    "inputs": {
+      "samples": [
+        "44",
+        0
+      ],
+      "vae": [
+        "1",
+        2
+      ]
+    },
+    "class_type": "VAEDecode"
+  },
+  "46": {
+    "inputs": {
+      "filename_prefix": "polar_bear_north_f4_unique_north_3",
+      "images": [
+        "45",
+        0
+      ]
+    },
+    "class_type": "SaveImage"
+  },
+  "54": {
+    "inputs": {
+      "text": "cute polar bear character, chibi proportions, right side view, facing right, standing pose, both feet on ground, contact frame, full body visible, white fluffy fur, small black eyes and nose, game sprite, clean vector-like style, soft shading, consistent character design, solid bright lime green background #00ff00, centered, high quality",
+      "clip": [
+        "1",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "55": {
+    "inputs": {
+      "seed": 2000,
+      "steps": 25,
+      "cfg": 7.5,
+      "sampler_name": "dpmpp_2m",
+      "scheduler": "karras",
+      "denoise": 1,
+      "model": [
+        "1",
+        0
+      ],
+      "positive": [
+        "54",
+        0
+      ],
+      "negative": [
+        "3",
+        0
+      ],
+      "latent_image": [
+        "2",
+        0
+      ]
+    },
+    "class_type": "KSampler"
+  },
+  "56": {
+    "inputs": {
+      "samples": [
+        "55",
+        0
+      ],
+      "vae": [
+        "1",
+        2
+      ]
+    },
+    "class_type": "VAEDecode"
+  },
+  "57": {
+    "inputs": {
+      "filename_prefix": "polar_bear_east_f1_unique_east_0",
+      "images": [
+        "56",
+        0
+      ]
+    },
+    "class_type": "SaveImage"
+  },
+  "65": {
+    "inputs": {
+      "text": "cute polar bear character, chibi proportions, right side view, facing right, walking, left leg forward, right leg back, mid-stride, full body visible, white fluffy fur, small black eyes and nose, game sprite, clean vector-like style, soft shading, consistent character design, solid bright lime green background #00ff00, centered, high quality",
+      "clip": [
+        "1",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "66": {
+    "inputs": {
+      "seed": 2007,
+      "steps": 25,
+      "cfg": 7.5,
+      "sampler_name": "dpmpp_2m",
+      "scheduler": "karras",
+      "denoise": 1,
+      "model": [
+        "1",
+        0
+      ],
+      "positive": [
+        "65",
+        0
+      ],
+      "negative": [
+        "3",
+        0
+      ],
+      "latent_image": [
+        "2",
+        0
+      ]
+    },
+    "class_type": "KSampler"
+  },
+  "67": {
+    "inputs": {
+      "samples": [
+        "66",
+        0
+      ],
+      "vae": [
+        "1",
+        2
+      ]
+    },
+    "class_type": "VAEDecode"
+  },
+  "68": {
+    "inputs": {
+      "filename_prefix": "polar_bear_east_f2_unique_east_1",
+      "images": [
+        "67",
+        0
+      ]
+    },
+    "class_type": "SaveImage"
+  },
+  "76": {
+    "inputs": {
+      "text": "cute polar bear character, chibi proportions, right side view, facing right, standing pose, both feet on ground, contact frame opposite phase, full body visible, white fluffy fur, small black eyes and nose, game sprite, clean vector-like style, soft shading, consistent character design, solid bright lime green background #00ff00, centered, high quality",
+      "clip": [
+        "1",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "77": {
+    "inputs": {
+      "seed": 2014,
+      "steps": 25,
+      "cfg": 7.5,
+      "sampler_name": "dpmpp_2m",
+      "scheduler": "karras",
+      "denoise": 1,
+      "model": [
+        "1",
+        0
+      ],
+      "positive": [
+        "76",
+        0
+      ],
+      "negative": [
+        "3",
+        0
+      ],
+      "latent_image": [
+        "2",
+        0
+      ]
+    },
+    "class_type": "KSampler"
+  },
+  "78": {
+    "inputs": {
+      "samples": [
+        "77",
+        0
+      ],
+      "vae": [
+        "1",
+        2
+      ]
+    },
+    "class_type": "VAEDecode"
+  },
+  "79": {
+    "inputs": {
+      "filename_prefix": "polar_bear_east_f3_unique_east_2",
+      "images": [
+        "78",
+        0
+      ]
+    },
+    "class_type": "SaveImage"
+  },
+  "87": {
+    "inputs": {
+      "text": "cute polar bear character, chibi proportions, right side view, facing right, walking, right leg forward, left leg back, mid-stride, full body visible, white fluffy fur, small black eyes and nose, game sprite, clean vector-like style, soft shading, consistent character design, solid bright lime green background #00ff00, centered, high quality",
+      "clip": [
+        "1",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "88": {
+    "inputs": {
+      "seed": 2021,
+      "steps": 25,
+      "cfg": 7.5,
+      "sampler_name": "dpmpp_2m",
+      "scheduler": "karras",
+      "denoise": 1,
+      "model": [
+        "1",
+        0
+      ],
+      "positive": [
+        "87",
+        0
+      ],
+      "negative": [
+        "3",
+        0
+      ],
+      "latent_image": [
+        "2",
+        0
+      ]
+    },
+    "class_type": "KSampler"
+  },
+  "89": {
+    "inputs": {
+      "samples": [
+        "88",
+        0
+      ],
+      "vae": [
+        "1",
+        2
+      ]
+    },
+    "class_type": "VAEDecode"
+  },
+  "90": {
+    "inputs": {
+      "filename_prefix": "polar_bear_east_f4_unique_east_3",
+      "images": [
+        "89",
+        0
+      ]
+    },
+    "class_type": "SaveImage"
+  },
+  "98": {
+    "inputs": {
+      "text": "cute polar bear character, chibi proportions, front view, facing toward camera, standing pose, both feet on ground, contact frame, full body visible, white fluffy fur, small black eyes and nose, game sprite, clean vector-like style, soft shading, consistent character design, solid bright lime green background #00ff00, centered, high quality",
+      "clip": [
+        "1",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "99": {
+    "inputs": {
+      "seed": 3000,
+      "steps": 25,
+      "cfg": 7.5,
+      "sampler_name": "dpmpp_2m",
+      "scheduler": "karras",
+      "denoise": 1,
+      "model": [
+        "1",
+        0
+      ],
+      "positive": [
+        "98",
+        0
+      ],
+      "negative": [
+        "3",
+        0
+      ],
+      "latent_image": [
+        "2",
+        0
+      ]
+    },
+    "class_type": "KSampler"
+  },
+  "100": {
+    "inputs": {
+      "samples": [
+        "99",
+        0
+      ],
+      "vae": [
+        "1",
+        2
+      ]
+    },
+    "class_type": "VAEDecode"
+  },
+  "101": {
+    "inputs": {
+      "filename_prefix": "polar_bear_south_f1_unique_south_0",
+      "images": [
+        "100",
+        0
+      ]
+    },
+    "class_type": "SaveImage"
+  },
+  "109": {
+    "inputs": {
+      "text": "cute polar bear character, chibi proportions, front view, facing toward camera, walking, left leg forward, right leg back, mid-stride, full body visible, white fluffy fur, small black eyes and nose, game sprite, clean vector-like style, soft shading, consistent character design, solid bright lime green background #00ff00, centered, high quality",
+      "clip": [
+        "1",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "110": {
+    "inputs": {
+      "seed": 3007,
+      "steps": 25,
+      "cfg": 7.5,
+      "sampler_name": "dpmpp_2m",
+      "scheduler": "karras",
+      "denoise": 1,
+      "model": [
+        "1",
+        0
+      ],
+      "positive": [
+        "109",
+        0
+      ],
+      "negative": [
+        "3",
+        0
+      ],
+      "latent_image": [
+        "2",
+        0
+      ]
+    },
+    "class_type": "KSampler"
+  },
+  "111": {
+    "inputs": {
+      "samples": [
+        "110",
+        0
+      ],
+      "vae": [
+        "1",
+        2
+      ]
+    },
+    "class_type": "VAEDecode"
+  },
+  "112": {
+    "inputs": {
+      "filename_prefix": "polar_bear_south_f2_unique_south_1",
+      "images": [
+        "111",
+        0
+      ]
+    },
+    "class_type": "SaveImage"
+  },
+  "120": {
+    "inputs": {
+      "text": "cute polar bear character, chibi proportions, front view, facing toward camera, standing pose, both feet on ground, contact frame opposite phase, full body visible, white fluffy fur, small black eyes and nose, game sprite, clean vector-like style, soft shading, consistent character design, solid bright lime green background #00ff00, centered, high quality",
+      "clip": [
+        "1",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "121": {
+    "inputs": {
+      "seed": 3014,
+      "steps": 25,
+      "cfg": 7.5,
+      "sampler_name": "dpmpp_2m",
+      "scheduler": "karras",
+      "denoise": 1,
+      "model": [
+        "1",
+        0
+      ],
+      "positive": [
+        "120",
+        0
+      ],
+      "negative": [
+        "3",
+        0
+      ],
+      "latent_image": [
+        "2",
+        0
+      ]
+    },
+    "class_type": "KSampler"
+  },
+  "122": {
+    "inputs": {
+      "samples": [
+        "121",
+        0
+      ],
+      "vae": [
+        "1",
+        2
+      ]
+    },
+    "class_type": "VAEDecode"
+  },
+  "123": {
+    "inputs": {
+      "filename_prefix": "polar_bear_south_f3_unique_south_2",
+      "images": [
+        "122",
+        0
+      ]
+    },
+    "class_type": "SaveImage"
+  },
+  "131": {
+    "inputs": {
+      "text": "cute polar bear character, chibi proportions, front view, facing toward camera, walking, right leg forward, left leg back, mid-stride, full body visible, white fluffy fur, small black eyes and nose, game sprite, clean vector-like style, soft shading, consistent character design, solid bright lime green background #00ff00, centered, high quality",
+      "clip": [
+        "1",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "132": {
+    "inputs": {
+      "seed": 3021,
+      "steps": 25,
+      "cfg": 7.5,
+      "sampler_name": "dpmpp_2m",
+      "scheduler": "karras",
+      "denoise": 1,
+      "model": [
+        "1",
+        0
+      ],
+      "positive": [
+        "131",
+        0
+      ],
+      "negative": [
+        "3",
+        0
+      ],
+      "latent_image": [
+        "2",
+        0
+      ]
+    },
+    "class_type": "KSampler"
+  },
+  "133": {
+    "inputs": {
+      "samples": [
+        "132",
+        0
+      ],
+      "vae": [
+        "1",
+        2
+      ]
+    },
+    "class_type": "VAEDecode"
+  },
+  "134": {
+    "inputs": {
+      "filename_prefix": "polar_bear_south_f4_unique_south_3",
+      "images": [
+        "133",
+        0
+      ]
+    },
+    "class_type": "SaveImage"
+  },
+  "142": {
+    "inputs": {
+      "text": "cute polar bear character, chibi proportions, left side view, facing left, standing pose, both feet on ground, contact frame, full body visible, white fluffy fur, small black eyes and nose, game sprite, clean vector-like style, soft shading, consistent character design, solid bright lime green background #00ff00, centered, high quality",
+      "clip": [
+        "1",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "143": {
+    "inputs": {
+      "seed": 4000,
+      "steps": 25,
+      "cfg": 7.5,
+      "sampler_name": "dpmpp_2m",
+      "scheduler": "karras",
+      "denoise": 1,
+      "model": [
+        "1",
+        0
+      ],
+      "positive": [
+        "142",
+        0
+      ],
+      "negative": [
+        "3",
+        0
+      ],
+      "latent_image": [
+        "2",
+        0
+      ]
+    },
+    "class_type": "KSampler"
+  },
+  "144": {
+    "inputs": {
+      "samples": [
+        "143",
+        0
+      ],
+      "vae": [
+        "1",
+        2
+      ]
+    },
+    "class_type": "VAEDecode"
+  },
+  "145": {
+    "inputs": {
+      "filename_prefix": "polar_bear_west_f1_unique_west_0",
+      "images": [
+        "144",
+        0
+      ]
+    },
+    "class_type": "SaveImage"
+  },
+  "153": {
+    "inputs": {
+      "text": "cute polar bear character, chibi proportions, left side view, facing left, walking, left leg forward, right leg back, mid-stride, full body visible, white fluffy fur, small black eyes and nose, game sprite, clean vector-like style, soft shading, consistent character design, solid bright lime green background #00ff00, centered, high quality",
+      "clip": [
+        "1",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "154": {
+    "inputs": {
+      "seed": 4007,
+      "steps": 25,
+      "cfg": 7.5,
+      "sampler_name": "dpmpp_2m",
+      "scheduler": "karras",
+      "denoise": 1,
+      "model": [
+        "1",
+        0
+      ],
+      "positive": [
+        "153",
+        0
+      ],
+      "negative": [
+        "3",
+        0
+      ],
+      "latent_image": [
+        "2",
+        0
+      ]
+    },
+    "class_type": "KSampler"
+  },
+  "155": {
+    "inputs": {
+      "samples": [
+        "154",
+        0
+      ],
+      "vae": [
+        "1",
+        2
+      ]
+    },
+    "class_type": "VAEDecode"
+  },
+  "156": {
+    "inputs": {
+      "filename_prefix": "polar_bear_west_f2_unique_west_1",
+      "images": [
+        "155",
+        0
+      ]
+    },
+    "class_type": "SaveImage"
+  },
+  "164": {
+    "inputs": {
+      "text": "cute polar bear character, chibi proportions, left side view, facing left, standing pose, both feet on ground, contact frame opposite phase, full body visible, white fluffy fur, small black eyes and nose, game sprite, clean vector-like style, soft shading, consistent character design, solid bright lime green background #00ff00, centered, high quality",
+      "clip": [
+        "1",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "165": {
+    "inputs": {
+      "seed": 4014,
+      "steps": 25,
+      "cfg": 7.5,
+      "sampler_name": "dpmpp_2m",
+      "scheduler": "karras",
+      "denoise": 1,
+      "model": [
+        "1",
+        0
+      ],
+      "positive": [
+        "164",
+        0
+      ],
+      "negative": [
+        "3",
+        0
+      ],
+      "latent_image": [
+        "2",
+        0
+      ]
+    },
+    "class_type": "KSampler"
+  },
+  "166": {
+    "inputs": {
+      "samples": [
+        "165",
+        0
+      ],
+      "vae": [
+        "1",
+        2
+      ]
+    },
+    "class_type": "VAEDecode"
+  },
+  "167": {
+    "inputs": {
+      "filename_prefix": "polar_bear_west_f3_unique_west_2",
+      "images": [
+        "166",
+        0
+      ]
+    },
+    "class_type": "SaveImage"
+  },
+  "175": {
+    "inputs": {
+      "text": "cute polar bear character, chibi proportions, left side view, facing left, walking, right leg forward, left leg back, mid-stride, full body visible, white fluffy fur, small black eyes and nose, game sprite, clean vector-like style, soft shading, consistent character design, solid bright lime green background #00ff00, centered, high quality",
+      "clip": [
+        "1",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "176": {
+    "inputs": {
+      "seed": 4021,
+      "steps": 25,
+      "cfg": 7.5,
+      "sampler_name": "dpmpp_2m",
+      "scheduler": "karras",
+      "denoise": 1,
+      "model": [
+        "1",
+        0
+      ],
+      "positive": [
+        "175",
+        0
+      ],
+      "negative": [
+        "3",
+        0
+      ],
+      "latent_image": [
+        "2",
+        0
+      ]
+    },
+    "class_type": "KSampler"
+  },
+  "177": {
+    "inputs": {
+      "samples": [
+        "176",
+        0
+      ],
+      "vae": [
+        "1",
+        2
+      ]
+    },
+    "class_type": "VAEDecode"
+  },
+  "178": {
+    "inputs": {
+      "filename_prefix": "polar_bear_west_f4_unique_west_3",
+      "images": [
+        "177",
+        0
+      ]
+    },
+    "class_type": "SaveImage"
+  },
+  "186": {
+    "inputs": {
+      "text": "flat isometric diamond floor tile, soft white snow surface, subtle texture, arctic landscape, game asset, solid bright lime green background #00ff00, centered, high quality",
+      "clip": [
+        "1",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "200": {
+    "inputs": {
+      "seed": 9937,
+      "steps": 25,
+      "cfg": 7.5,
+      "sampler_name": "dpmpp_2m",
+      "scheduler": "karras",
+      "denoise": 1,
+      "model": [
+        "1",
+        0
+      ],
+      "positive": [
+        "186",
+        0
+      ],
+      "negative": [
+        "3",
+        0
+      ],
+      "latent_image": [
+        "2",
+        0
+      ]
+    },
+    "class_type": "KSampler"
+  },
+  "201": {
+    "inputs": {
+      "samples": [
+        "200",
+        0
+      ],
+      "vae": [
+        "1",
+        2
+      ]
+    },
+    "class_type": "VAEDecode"
+  },
+  "202": {
+    "inputs": {
+      "filename_prefix": "tile_snow_unique_200",
+      "images": [
+        "201",
+        0
+      ]
+    },
+    "class_type": "SaveImage"
+  },
+  "187": {
+    "inputs": {
+      "text": "flat isometric diamond floor tile, smooth reflective blue ice surface, arctic glacier, game asset, solid bright lime green background #00ff00, centered, high quality",
+      "clip": [
+        "1",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "210": {
+    "inputs": {
+      "seed": 9514,
+      "steps": 25,
+      "cfg": 7.5,
+      "sampler_name": "dpmpp_2m",
+      "scheduler": "karras",
+      "denoise": 1,
+      "model": [
+        "1",
+        0
+      ],
+      "positive": [
+        "187",
+        0
+      ],
+      "negative": [
+        "3",
+        0
+      ],
+      "latent_image": [
+        "2",
+        0
+      ]
+    },
+    "class_type": "KSampler"
+  },
+  "211": {
+    "inputs": {
+      "samples": [
+        "210",
+        0
+      ],
+      "vae": [
+        "1",
+        2
+      ]
+    },
+    "class_type": "VAEDecode"
+  },
+  "212": {
+    "inputs": {
+      "filename_prefix": "tile_ice_unique_210",
+      "images": [
+        "211",
+        0
+      ]
+    },
+    "class_type": "SaveImage"
+  },
+  "188": {
+    "inputs": {
+      "text": "flat isometric diamond floor tile, cracked ice surface with deep blue fissures, arctic glacier, game asset, solid bright lime green background #00ff00, centered, high quality",
+      "clip": [
+        "1",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "220": {
+    "inputs": {
+      "seed": 9130,
+      "steps": 25,
+      "cfg": 7.5,
+      "sampler_name": "dpmpp_2m",
+      "scheduler": "karras",
+      "denoise": 1,
+      "model": [
+        "1",
+        0
+      ],
+      "positive": [
+        "188",
+        0
+      ],
+      "negative": [
+        "3",
+        0
+      ],
+      "latent_image": [
+        "2",
+        0
+      ]
+    },
+    "class_type": "KSampler"
+  },
+  "221": {
+    "inputs": {
+      "samples": [
+        "220",
+        0
+      ],
+      "vae": [
+        "1",
+        2
+      ]
+    },
+    "class_type": "VAEDecode"
+  },
+  "222": {
+    "inputs": {
+      "filename_prefix": "tile_ice_cracks_unique_220",
+      "images": [
+        "221",
+        0
+      ]
+    },
+    "class_type": "SaveImage"
+  }
+}

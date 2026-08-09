@@ -3,9 +3,14 @@
 Post-process ComfyUI outputs into game-ready Phaser assets.
 
 Expects square source images with a uniform background color
-(lime green from the v2 workflow, or any solid color from older runs).
+(lime green from the workflow, or any solid color from older runs).
+
+For v3 outputs:
+  - 16 polar-bear walk frames (4 directions x 4 poses)
+  - 3 tile textures
+
 Produces:
-  - public/assets/characters/polar-bear.png  (256x256 spritesheet)
+  - public/assets/characters/polar-bear.png  (256x256 spritesheet, 4x4)
   - public/assets/tiles/{snow,ice,ice-cracks}.png  (64x32 diamond tiles)
 """
 import json
@@ -91,31 +96,32 @@ def make_isometric_tile(img: Image.Image) -> Image.Image:
     return tile
 
 
+def latest_source(pattern: str) -> Path:
+    """Pick the newest source file matching a glob pattern."""
+    matches = sorted(SRC.glob(pattern))
+    if not matches:
+        raise FileNotFoundError(f"No source image matching: {SRC / pattern}")
+    return matches[-1]
+
+
 def build_polar_bear_spritesheet() -> Image.Image:
-    """Assemble a 4x4 spritesheet: 4 directions x 4 duplicate walk frames."""
-    frames = []
-    for direction in DIRECTION_ORDER:
-        path = sorted(SRC.glob(f"polar_bear_{direction}_*.png"))[-1]
-        if not path.exists():
-            raise FileNotFoundError(f"Missing source image: {path}")
-
-        img = Image.open(path)
-        img = remove_background(img, tolerance=60)
-        img.thumbnail((SPRITE_SIZE, SPRITE_SIZE), Image.Resampling.LANCZOS)
-
-        canvas = Image.new("RGBA", (SPRITE_SIZE, SPRITE_SIZE), (0, 0, 0, 0))
-        cx = (SPRITE_SIZE - img.width) // 2
-        cy = (SPRITE_SIZE - img.height) // 2
-        canvas.paste(img, (cx, cy), img)
-
-        for _ in range(4):
-            frames.append(canvas.copy())
-
+    """Assemble a 4x4 spritesheet: 4 directions x 4 walk frames."""
     sheet = Image.new("RGBA", (SPRITE_SIZE * 4, SPRITE_SIZE * 4), (0, 0, 0, 0))
+
     for row, direction in enumerate(DIRECTION_ORDER):
         for col in range(4):
-            idx = row * 4 + col
-            sheet.paste(frames[idx], (col * SPRITE_SIZE, row * SPRITE_SIZE))
+            # v3 filenames include the frame index, e.g. polar_bear_north_f1_...
+            path = latest_source(f"polar_bear_{direction}_f{col + 1}_*.png")
+            img = Image.open(path)
+            img = remove_background(img, tolerance=60)
+            img.thumbnail((SPRITE_SIZE, SPRITE_SIZE), Image.Resampling.LANCZOS)
+
+            canvas = Image.new("RGBA", (SPRITE_SIZE, SPRITE_SIZE), (0, 0, 0, 0))
+            cx = (SPRITE_SIZE - img.width) // 2
+            cy = (SPRITE_SIZE - img.height) // 2
+            canvas.paste(img, (cx, cy), img)
+            sheet.paste(canvas, (col * SPRITE_SIZE, row * SPRITE_SIZE))
+
     return sheet
 
 
@@ -123,10 +129,7 @@ def build_tiles() -> dict[str, Image.Image]:
     """Generate diamond isometric tiles from square textures."""
     tiles = {}
     for name in TILES:
-        path = sorted(SRC.glob(f"tile_{name}_*.png"))[-1]
-        if not path.exists():
-            raise FileNotFoundError(f"Missing source image: {path}")
-
+        path = latest_source(f"tile_{name}_*.png")
         img = Image.open(path)
         img = remove_background(img, tolerance=55)
         # Scale up a little before diamond extraction to preserve texture detail.
