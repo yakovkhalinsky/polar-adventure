@@ -539,19 +539,21 @@ def _remove_white_fringe(arr: np.ndarray) -> np.ndarray:
     saturation = np.where(max_rgb > 0, (max_rgb - min_rgb) / max_rgb, 0)
 
     # Pixels that are light and desaturated are likely white-fringe contamination.
+    # Extend to lower lightness and higher saturation tolerance so grey halos
+    # around the hoodie/jeans are caught too.
     fringe = (
         (alpha > 0)
-        & (max_rgb > 230)
-        & (saturation < 0.25)
+        & (max_rgb > 215)
+        & (saturation < 0.35)
     )
 
     # Estimate true alpha: 0 = white background, 1 = solid color.
     # For a grey fringe pixel, (255 - max_rgb)/255 approximates the colored
     # contribution. We keep pixels that have meaningful color, drop near-white.
-    estimated_alpha = np.clip((255 - max_rgb) / 25.0, 0, 1)
+    estimated_alpha = np.clip((255 - max_rgb) / 40.0, 0, 1)
 
     # Drop anything still too close to pure white.
-    estimated_alpha[fringe & (max_rgb > 248)] = 0
+    estimated_alpha[fringe & (max_rgb > 240)] = 0
 
     # Apply the refined alpha, but do not increase opacity.
     new_alpha = alpha * estimated_alpha / 255.0
@@ -647,6 +649,19 @@ def _isolate_white_bg_sprite(img: Image.Image) -> Image.Image:
     arr[~keep, 3] = 0
     arr = _remove_white_fringe(arr)
     return Image.fromarray(arr.astype(np.uint8))
+
+
+def _hard_alpha_cut(img: Image.Image, threshold: int = 128) -> Image.Image:
+    """Convert soft alpha to a hard mask. Useful for flat vector sprites.
+
+    Eliminates anti-aliasing fringes by making every pixel either fully opaque
+    or fully transparent. Flat vector art with thick outlines tolerates this
+    well because the edges are already stylized.
+    """
+    rgba = img.convert("RGBA")
+    arr = np.array(rgba)
+    arr[:, :, 3] = np.where(arr[:, :, 3] >= threshold, 255, 0)
+    return Image.fromarray(arr)
 
 
 def _isolate_unknown_bg_sprite(img: Image.Image) -> Image.Image:
@@ -830,12 +845,14 @@ def _isolate_with_rembg(img: Image.Image) -> Image.Image | None:
 
 
 def isolate_largest_sprite(img: Image.Image, target_size: int, raw_path: Path | None = None,
-                           force_rembg: bool = False) -> Image.Image:
+                           force_rembg: bool = False, hard_alpha: bool = False) -> Image.Image:
     """Crop to the largest foreground region and make the background transparent.
 
     Auto-detects a near-pure white background (typical of BFL/FLUX output) and uses
     rembg when available for clean shadow removal. Falls back to a fast morphological
     mask, then to adaptive flood fill for colored/gradient backgrounds.
+
+    Pass hard_alpha=True for flat vector sprites to eliminate anti-aliasing fringes.
     """
     rgba = img.convert("RGBA")
     if raw_path is not None:
@@ -865,6 +882,9 @@ def isolate_largest_sprite(img: Image.Image, target_size: int, raw_path: Path | 
             isolated = _isolate_white_bg_sprite(rgba)
         else:
             isolated = _isolate_unknown_bg_sprite(rgba)
+
+    if hard_alpha:
+        isolated = _hard_alpha_cut(isolated)
 
     # Crop to the non-transparent bounding box.
     alpha = np.array(isolated.split()[-1])
@@ -989,7 +1009,8 @@ def make_bear_reference(server: str | None, seed: int, size: int = 512,
         result = bfl_poll_result(bfl_api_key, request_id, polling_url=polling_url)
         bfl_download_image(result, out)
         with Image.open(out).convert("RGBA") as img:
-            isolate_largest_sprite(img, size, raw_path=out.with_suffix(".raw.png")).save(out)
+            isolate_largest_sprite(img, size, raw_path=out.with_suffix(".raw.png"),
+                                   hard_alpha=flat_style).save(out)
         return out
 
     if server is None:
@@ -1019,7 +1040,8 @@ def make_bear_reference(server: str | None, seed: int, size: int = 512,
     images = entry.get("outputs", {}).get("7", {}).get("images", [])
     download_image(server, images[0]["filename"], images[0].get("subfolder", ""), out)
     with Image.open(out).convert("RGBA") as img:
-        isolate_largest_sprite(img, size, raw_path=out.with_suffix(".raw.png")).save(out)
+        isolate_largest_sprite(img, size, raw_path=out.with_suffix(".raw.png"),
+                               hard_alpha=flat_style).save(out)
     return out
 
 
