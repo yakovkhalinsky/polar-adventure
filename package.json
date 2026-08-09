@@ -1,7 +1,7 @@
 {
   "name": "polar-adventures",
   "version": "0.1.0",
-  "description": "Polar/arctic ice-themed isometric adventure game built with melonJS, TypeScript, and Vite.",
+  "description": "Polar/arctic ice-themed isometric adventure game built with Three.js, TypeScript, and Vite.",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -15,7 +15,8 @@
     "vite": "^6.0.11"
   },
   "dependencies": {
-    "melonjs": "^19.9.1"
+    "@types/three": "^0.185.4",
+    "three": "^0.185.1"
   },
   "engines": {
     "node": ">=22.0.0"
