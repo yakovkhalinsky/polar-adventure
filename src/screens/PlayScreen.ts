@@ -17,14 +17,7 @@ export class PlayScreen extends me.Stage {
     // Set the arctic background color on the renderer.
     me.game.renderer.backgroundColor.parseCSS('#0b1d2e');
 
-    // Preload image assets. melonJS will queue them and continue once ready.
-    me.loader.load([
-      { name: 'polar-bear', type: 'image', src: 'assets/characters/polar-bear.png' },
-      { name: 'tile-snow', type: 'image', src: 'assets/tiles/snow.png' },
-      { name: 'tile-ice', type: 'image', src: 'assets/tiles/ice.png' },
-      { name: 'tile-ice-cracks', type: 'image', src: 'assets/tiles/ice-cracks.png' },
-    ]);
-
+    // Assets are preloaded in main.ts before this screen is activated.
     this.drawIsometricGrid();
 
     // Spawn the player at the center of the grid.
