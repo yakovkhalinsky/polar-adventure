@@ -390,6 +390,14 @@ def tripo_bear_3d_workflow(image_name: str, api_key: str | None = None) -> dict[
                 "output_directory": "",
             },
         },
+        "3": {
+            "class_type": "SaveText",
+            "inputs": {
+                "text": ["2", 0],
+                "filename_prefix": "polar-bear-3d-path",
+                "format": "txt",
+            },
+        },
     }
 
 
