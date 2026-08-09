@@ -523,12 +523,16 @@ def bfl_download_image(result: dict[str, Any], dest: Path) -> None:
     print(f"  downloaded {dest}")
 
 
-def _remove_white_fringe(arr: np.ndarray) -> np.ndarray:
+def _remove_white_fringe(arr: np.ndarray, edge_only: bool = False) -> np.ndarray:
     """After masking, decontaminate anti-aliased white edges.
 
     BFL/FLUX renders anti-aliased edges against white, leaving a light grey
     fringe when the white background is removed. This pass removes obvious
     white halo pixels and tries to recover the underlying color for soft edges.
+
+    When ``edge_only`` is True, only pixels that touch the transparent background
+    are considered. This prevents internal light subject areas (e.g. the white
+    polar bear's head) from being mistaken for fringe and punched out.
     """
     height, width, _ = arr.shape
     rgb = arr[:, :, :3]
@@ -538,14 +542,26 @@ def _remove_white_fringe(arr: np.ndarray) -> np.ndarray:
     min_rgb = rgb.min(axis=2)
     saturation = np.where(max_rgb > 0, (max_rgb - min_rgb) / max_rgb, 0)
 
-    # Pixels that are light and desaturated are likely white-fringe contamination.
-    # Extend to lower lightness and higher saturation tolerance so grey halos
-    # around the hoodie/jeans are caught too.
     fringe = (
         (alpha > 0)
         & (max_rgb > 215)
         & (saturation < 0.35)
     )
+
+    if edge_only:
+        # An edge pixel has at least one fully-transparent neighbour.
+        transparent = alpha == 0
+        has_transparent_neighbour = np.zeros((height, width), bool)
+        for dy in (-1, 0, 1):
+            for dx in (-1, 0, 1):
+                if dy == 0 and dx == 0:
+                    continue
+                ny = slice(max(0, dy), min(height, height + dy))
+                nx = slice(max(0, dx), min(width, width + dx))
+                sy = slice(max(0, -dy), min(height, height - dy))
+                sx = slice(max(0, -dx), min(width, width - dx))
+                has_transparent_neighbour[sy, sx] |= transparent[ny, nx]
+        fringe &= has_transparent_neighbour
 
     # Estimate true alpha: 0 = white background, 1 = solid color.
     # For a grey fringe pixel, (255 - max_rgb)/255 approximates the colored
@@ -561,7 +577,7 @@ def _remove_white_fringe(arr: np.ndarray) -> np.ndarray:
     return arr
 
 
-def _isolate_white_bg_sprite(img: Image.Image) -> Image.Image:
+def _isolate_white_bg_sprite(img: Image.Image, hard_alpha: bool = False) -> Image.Image:
     """Remove a near-pure white background using connected components + morphology.
 
     Best for BFL/FLUX images that come back with a clean white studio background.
@@ -647,21 +663,78 @@ def _isolate_white_bg_sprite(img: Image.Image) -> Image.Image:
     keep = np.array(mask_img) > 128
 
     arr[~keep, 3] = 0
+    if hard_alpha:
+        # Flat vector sprites get a hard alpha cut later, so skip the
+        # white-fringe decontamination that can punch holes in the white head.
+        return Image.fromarray(arr.astype(np.uint8))
     arr = _remove_white_fringe(arr)
     return Image.fromarray(arr.astype(np.uint8))
 
 
-def _hard_alpha_cut(img: Image.Image, threshold: int = 128) -> Image.Image:
+def _hard_alpha_cut(img: Image.Image, threshold: int = 1) -> Image.Image:
     """Convert soft alpha to a hard mask. Useful for flat vector sprites.
 
     Eliminates anti-aliasing fringes by making every pixel either fully opaque
     or fully transparent. Flat vector art with thick outlines tolerates this
     well because the edges are already stylized.
+
+    The default threshold of 1 ensures any pixel that still carries color after
+    background removal becomes fully opaque, preventing checkerboard show-through
+    on light subject areas such as the polar bear's white head.
     """
     rgba = img.convert("RGBA")
     arr = np.array(rgba)
     arr[:, :, 3] = np.where(arr[:, :, 3] >= threshold, 255, 0)
     return Image.fromarray(arr)
+
+
+def _recover_lost_white_pixels(arr: np.ndarray) -> np.ndarray:
+    """Restore opaque alpha to light subject pixels that were punched out.
+
+    The white-fringe decontamination pass can over-aggressively drop internal
+    light areas (e.g. the bear's white head or hoodie highlights). This pass
+    reclaims transparent-but-light pixels that are still connected to the
+    visible subject.
+    """
+    from collections import deque
+
+    height, width, _ = arr.shape
+    rgb = arr[:, :, :3]
+    alpha = arr[:, :, 3]
+
+    max_rgb = rgb.max(axis=2)
+    min_rgb = rgb.min(axis=2)
+    saturation = np.where(max_rgb > 0, (max_rgb - min_rgb) / max_rgb, 0)
+
+    # Candidate pixels: transparent but light and desaturated.
+    lost = (alpha == 0) & (max_rgb > 220) & (saturation < 0.25)
+    if not lost.any():
+        return arr
+
+    subject = alpha > 0
+    visited = np.zeros((height, width), bool)
+    q: deque[tuple[int, int]] = deque()
+    for y in range(height):
+        for x in range(width):
+            if subject[y, x] and not visited[y, x]:
+                visited[y, x] = True
+                q.append((y, x))
+
+    while q:
+        y, x = q.popleft()
+        for dy in (-1, 0, 1):
+            for dx in (-1, 0, 1):
+                if dy == 0 and dx == 0:
+                    continue
+                ny, nx = y + dy, x + dx
+                if 0 <= ny < height and 0 <= nx < width:
+                    if not visited[ny, nx] and lost[ny, nx]:
+                        visited[ny, nx] = True
+                        q.append((ny, nx))
+
+    recovered = visited & lost
+    arr[recovered, 3] = 255
+    return arr
 
 
 def _isolate_unknown_bg_sprite(img: Image.Image) -> Image.Image:
@@ -879,12 +952,15 @@ def isolate_largest_sprite(img: Image.Image, target_size: int, raw_path: Path | 
 
     if isolated is None:
         if mostly_white:
-            isolated = _isolate_white_bg_sprite(rgba)
+            isolated = _isolate_white_bg_sprite(rgba, hard_alpha=hard_alpha)
         else:
             isolated = _isolate_unknown_bg_sprite(rgba)
 
     if hard_alpha:
-        isolated = _hard_alpha_cut(isolated)
+        # Reclaim internal light pixels (white head, highlights) before binarising.
+        arr = np.array(isolated.convert("RGBA")).astype(np.float32)
+        arr = _recover_lost_white_pixels(arr)
+        isolated = _hard_alpha_cut(Image.fromarray(arr.astype(np.uint8)))
 
     # Crop to the non-transparent bounding box.
     alpha = np.array(isolated.split()[-1])
@@ -904,6 +980,12 @@ def isolate_largest_sprite(img: Image.Image, target_size: int, raw_path: Path | 
     x = (target_size - crop.width) // 2
     y = (target_size - crop.height) // 2
     out.paste(crop, (x, y), crop)
+
+    if hard_alpha:
+        # Resizing with LANCZOS reintroduces soft anti-aliased edges. Binarise
+        # one last time so flat vector sprites stay fully opaque/transparent.
+        out = _hard_alpha_cut(out)
+
     return out
 
 
@@ -1122,13 +1204,17 @@ def make_bear_direction(server: str, direction: str, reference: Path, seed: int,
     return out
 
 
-def assemble_bear_sheet(directions: dict[str, list[Path]], rows: int = 8) -> Path:
+def assemble_bear_sheet(directions: dict[str, list[Path]], rows: int = 8,
+                        hard_alpha: bool = False) -> Path:
     """Assemble a polar bear spritesheet.
 
     By default (rows=8) produces the full 4 directions x 8 rows sheet used by the
     realistic 3D pipeline. When rows=4 and directions contains one frame per
     direction, produces a compact 4x4 flat-vector sheet: walk-up, walk-right,
     walk-down, walk-left.
+
+    Pass ``hard_alpha=True`` for flat-vector sheets so that the final pasted
+    frames stay fully opaque/transparent.
     """
     cell = 128
     cols = 4
@@ -1164,6 +1250,9 @@ def assemble_bear_sheet(directions: dict[str, list[Path]], rows: int = 8) -> Pat
             for col in range(cols):
                 frame = direction_frames[col % len(direction_frames)]
                 sheet.paste(frame, (col * cell, row * cell), frame)
+
+    if hard_alpha:
+        sheet = _hard_alpha_cut(sheet)
 
     out = PREVIEW / "characters/polar-bear.png"
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -1349,7 +1438,7 @@ def main() -> None:
                 # Flat vector style: one static pose per direction, reuse for all 4 frames.
                 for d in ["up", "right", "down", "left"]:
                     directions[d] = [refs[d]]
-                assemble_bear_sheet(directions, rows=4)
+                assemble_bear_sheet(directions, rows=4, hard_alpha=True)
             else:
                 # Realistic 3D style: two alternating walk poses per direction.
                 for d in ["up", "right", "down", "left"]:
