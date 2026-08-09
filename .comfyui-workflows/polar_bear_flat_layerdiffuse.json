@@ -1,6 +1,6 @@
 {
   "1": {
-    "inputs": { "ckpt_name": "v1-5-pruned-emaonly.safetensors" },
+    "inputs": { "ckpt_name": "cartoonxl_v10.safetensors" },
     "class_type": "CheckpointLoaderSimple"
   },
   "2": {
@@ -21,7 +21,7 @@
   "4": {
     "inputs": {
       "model": ["1", 0],
-      "config": "SD15, Attention Injection, attn_sharing",
+      "config": "SDXL, Attention Injection",
       "weight": 1.0
     },
     "class_type": "LayeredDiffusionApply"
@@ -59,7 +59,7 @@
     "inputs": {
       "samples": ["11", 0],
       "images": ["12", 0],
-      "sd_version": "SD15",
+      "sd_version": "SDXL",
       "sub_batch_size": 16
     },
     "class_type": "LayeredDiffusionDecodeRGBA"
@@ -104,7 +104,7 @@
     "inputs": {
       "samples": ["21", 0],
       "images": ["22", 0],
-      "sd_version": "SD15",
+      "sd_version": "SDXL",
       "sub_batch_size": 16
     },
     "class_type": "LayeredDiffusionDecodeRGBA"
@@ -149,7 +149,7 @@
     "inputs": {
       "samples": ["31", 0],
       "images": ["32", 0],
-      "sd_version": "SD15",
+      "sd_version": "SDXL",
       "sub_batch_size": 16
     },
     "class_type": "LayeredDiffusionDecodeRGBA"
@@ -194,7 +194,7 @@
     "inputs": {
       "samples": ["41", 0],
       "images": ["42", 0],
-      "sd_version": "SD15",
+      "sd_version": "SDXL",
       "sub_batch_size": 16
     },
     "class_type": "LayeredDiffusionDecodeRGBA"
