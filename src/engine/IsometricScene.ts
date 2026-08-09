@@ -55,7 +55,13 @@ export class IsometricScene {
       powerPreference: 'high-performance',
     });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    this.renderer.setSize(parent.clientWidth, parent.clientHeight);
+
+    // Guard against a zero-size parent at init (can happen on some mobile
+    // browsers or when CSS hasn't been fully resolved yet). Use the window
+    // dimensions as a fallback so the canvas is never 0x0.
+    const initialWidth = parent.clientWidth || window.innerWidth;
+    const initialHeight = parent.clientHeight || window.innerHeight;
+    this.renderer.setSize(initialWidth, initialHeight);
     this.renderer.shadowMap.enabled = false; // keep simple for now
     this.parent.appendChild(this.renderer.domElement);
 
