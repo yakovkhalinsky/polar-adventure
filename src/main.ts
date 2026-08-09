@@ -36,7 +36,7 @@ async function main(): Promise<void> {
       loadTexture('assets/objects/iceberg.png'),
       loadTexture('assets/objects/tree.png'),
       loadTexture('assets/objects/snow-mound.png'),
-      loadTexture('assets/objects/penguin.png'),
+      loadTexture('assets/characters/penguin.png'),
       loadTexture('assets/objects/fish.png'),
       loadTexture('assets/objects/igloo.png'),
       loadTexture('assets/objects/sign.png'),
