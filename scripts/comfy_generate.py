@@ -350,11 +350,12 @@ def upload_image(server: str, path: Path) -> str:
 # ---------------------------------------------------------------------------
 
 
-def tripo_bear_3d_workflow(image_name: str) -> dict[str, Any]:
+def tripo_bear_3d_workflow(image_name: str, api_key: str | None = None) -> dict[str, Any]:
     """ComfyUI prompt workflow that sends a bear reference image to Tripo image-to-3D.
 
-    Requires the VAST-AI-Research/ComfyUI-Tripo custom nodes and a TRIPO_API_KEY
-    environment variable (or a key entered in the node UI).
+    Requires the VAST-AI-Research/ComfyUI-Tripo custom nodes and a Tripo API key.
+    Pass the key via the api_key argument, the TRIPO_API_KEY environment variable,
+    or enter it directly in the node UI.
     """
     return {
         "1": {
@@ -365,7 +366,7 @@ def tripo_bear_3d_workflow(image_name: str) -> dict[str, Any]:
             "class_type": "TripoAPIDraft",
             "inputs": {
                 "mode": "image_to_model",
-                "apikey": "",
+                "apikey": api_key or "",
                 "prompt": "",
                 "negative_prompt": "",
                 "image": ["1", 0],
@@ -415,14 +416,14 @@ def extract_model_file_from_history(entry: dict[str, Any], node_id: str = "2") -
 
 
 def make_bear_3d(server: str, reference: Path | None = None,
-                 timeout: float = 600.0) -> Path:
+                 timeout: float = 600.0, api_key: str | None = None) -> Path:
     """Generate a textured GLB for the polar bear using Tripo image-to-3D."""
     reference = reference or PREVIEW / "characters/bear-reference-down.png"
     if not reference.exists():
         raise FileNotFoundError(f"Bear reference not found: {reference}")
 
     uploaded_name = upload_image(server, reference)
-    workflow = tripo_bear_3d_workflow(uploaded_name)
+    workflow = tripo_bear_3d_workflow(uploaded_name, api_key=api_key)
 
     prompt_id = submit(server, workflow)
     print(f"[bear-3d] queued {prompt_id}")
@@ -1165,6 +1166,7 @@ def main() -> None:
     parser.add_argument("--bfl", action="store_true", help="Use the Black Forest Labs FLUX API instead of ComfyUI")
     parser.add_argument("--bfl-model", default="flux-pro-1.1", help="BFL model to use (default: flux-pro-1.1)")
     parser.add_argument("--bfl-api-key", default=None, help="BFL API key (defaults to BFL_API_KEY env var)")
+    parser.add_argument("--tripo-api-key", default=None, help="Tripo API key (defaults to TRIPO_API_KEY env var)")
     args = parser.parse_args()
 
     if args.no_lora:
@@ -1250,10 +1252,12 @@ def main() -> None:
 
     if args.preview_bear_3d:
         require_tripo_nodes(args.server)
-        if not os.environ.get("TRIPO_API_KEY"):
-            print("WARN: TRIPO_API_KEY is not set. The Tripo node may fail unless the key is entered in its UI widget.", file=sys.stderr)
+        tripo_api_key = args.tripo_api_key or os.environ.get("TRIPO_API_KEY")
+        if not tripo_api_key:
+            print("WARN: Tripo API key is not set. The Tripo node may fail unless the key is entered in its UI widget.", file=sys.stderr)
+            print("       Set TRIPO_API_KEY or pass --tripo-api-key.", file=sys.stderr)
         try:
-            make_bear_3d(args.server, reference=args.style_ref, timeout=900.0)
+            make_bear_3d(args.server, reference=args.style_ref, timeout=900.0, api_key=tripo_api_key)
         except Exception as exc:
             print(f"[bear-3d] failed: {exc}", file=sys.stderr)
             sys.exit(1)
