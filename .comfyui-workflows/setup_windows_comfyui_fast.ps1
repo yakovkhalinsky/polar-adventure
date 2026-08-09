@@ -31,6 +31,10 @@
 
 .EXAMPLE
     .\setup_windows_comfyui_fast.ps1 -ComfyUiPath "C:\Users\yakov\AppData\Local\Comfy-Desktop\ComfyUI-Installs\ComfyUI\ComfyUI"
+
+.NOTE
+    CartoonXL is an SDXL 1.0 checkpoint. You need a ComfyUI install that can run SDXL (most modern installs do).
+    The Civitai download URL may redirect to a signed B2 link; curl.exe and Invoke-WebRequest both follow redirects.
 #>
 param(
     [string]$ComfyUiPath = "$env:LOCALAPPDATA\Comfy-Desktop\ComfyUI-Installs\ComfyUI\ComfyUI",
@@ -189,6 +193,11 @@ $downloads = @(
         Dest = Join-Path $modelsDir "checkpoints\v1-5-pruned-emaonly.safetensors"
     },
     @{
+        Name = "CartoonXL SDXL checkpoint (flat vector game style)"
+        Url  = "https://civitai.com/api/download/models/437130"
+        Dest = Join-Path $modelsDir "checkpoints\cartoonxl_v10.safetensors"
+    },
+    @{
         Name = "Improved VAE"
         Url  = "https://huggingface.co/stabilityai/sd-vae-ft-mse-original/resolve/main/vae-ft-mse-840000-ema-pruned.safetensors?download=true"
         Dest = Join-Path $modelsDir "vae\vae-ft-mse-840000-ema-pruned.safetensors"
@@ -258,12 +267,18 @@ if (-not $SkipModels) {
     Write-Info "Model downloads complete: $successCount succeeded, $failCount failed."
 
     Write-Host ""
+    Write-Warn "Model notes:"
+    Write-Info "  CartoonXL is an SDXL checkpoint. After install, use it in workflows:"
+    Write-Info "    - Prompt keywords: cartoon, cartoon style, flat, cute, kawaii, clipart"
+    Write-Info "    - Recommended: 28-40 steps, CFG 7-8, DPM++ 2M Karras, 1024x1024 then downscale"
+
+    Write-Host ""
     Write-Warn "LoRA note:"
     Write-Info "  You must download LoRAs manually because most sources require login."
     Write-Info "  Put them in: $(Join-Path $modelsDir 'loras')"
-    Write-Info "  Hugging Face options:"
-    Write-Info "    - Witchpot/icestage (arctic flavor) -> https://huggingface.co/Witchpot/icestage"
-    Write-Info "  Civitai options (if you can reach the site):"
+    Write-Info "  Recommended for flat-vector characters:"
+    Write-Info "    - line-art-flat-colors-sdxl -> https://huggingface.co/Muapi/line-art-flat-colors-sdxl"
+    Write-Info "  Recommended for isometric tiles/objects:"
     Write-Info "    - Zavy's Cute Isometric Tiles (SDXL) -> https://civarchive.com/models/340599?modelVersionId=381373"
     Write-Info "    - Wolfie's Isometric Scenes (SDXL)  -> https://civitai.com/models/593055/wolfies-isometric-scenes-sdxl-concept"
     Write-Info "    - DarkoIsometricStyle (SDXL)         -> https://civitai.com/models/1954920/darkoisometricstyle"

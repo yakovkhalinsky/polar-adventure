@@ -22,6 +22,10 @@
 
 .EXAMPLE
     .\setup_windows_comfyui.ps1 -ComfyUiPath "C:\Users\yakov\AppData\Local\Comfy-Desktop\ComfyUI-Installs\ComfyUI\ComfyUI"
+
+.NOTE
+    CartoonXL is an SDXL 1.0 checkpoint. You need a ComfyUI install that can run SDXL (most modern installs do).
+    The Civitai download URL may redirect to a signed B2 link; curl.exe and Invoke-WebRequest both follow redirects.
 #>
 param(
     [string]$ComfyUiPath = "$env:LOCALAPPDATA\Comfy-Desktop\ComfyUI-Installs\ComfyUI\ComfyUI",
@@ -91,6 +95,11 @@ $downloads = @(
         Dest = Join-Path $modelsDir "checkpoints\v1-5-pruned-emaonly.safetensors"
     },
     @{
+        Name = "CartoonXL SDXL checkpoint (flat vector game style)"
+        Url  = "https://civitai.com/api/download/models/437130"
+        Dest = Join-Path $modelsDir "checkpoints\cartoonxl_v10.safetensors"
+    },
+    @{
         Name = "Improved VAE"
         Url  = "https://huggingface.co/stabilityai/sd-vae-ft-mse-original/resolve/main/vae-ft-mse-840000-ema-pruned.safetensors?download=true"
         Dest = Join-Path $modelsDir "vae\vae-ft-mse-840000-ema-pruned.safetensors"
@@ -113,12 +122,17 @@ if (-not $SkipModels) {
         Get-ModelFile -Url $item.Url -Destination $item.Dest -Name $item.Name
     }
 
+    Write-Host "`nModel notes:" -ForegroundColor Yellow
+    Write-Host "  CartoonXL is an SDXL checkpoint. After install, use it in workflows:" -ForegroundColor Cyan
+    Write-Host "    - Prompt keywords: cartoon, cartoon style, flat, cute, kawaii, clipart" -ForegroundColor Cyan
+    Write-Host "    - Recommended: 28-40 steps, CFG 7-8, DPM++ 2M Karras, 1024x1024 then downscale" -ForegroundColor Cyan
+
     Write-Host "`nLoRA note:" -ForegroundColor Yellow
     Write-Host "  You must download LoRAs manually because most sources require login." -ForegroundColor Cyan
     Write-Host "  Put them in: $(Join-Path $modelsDir 'loras')" -ForegroundColor Cyan
-    Write-Host "  Hugging Face options:" -ForegroundColor Cyan
-    Write-Host "    - Witchpot/icestage (arctic flavor)    -> https://huggingface.co/Witchpot/icestage" -ForegroundColor Cyan
-    Write-Host "  Civitai options (if you can reach the site):" -ForegroundColor Cyan
+    Write-Host "  Recommended for flat-vector characters:" -ForegroundColor Cyan
+    Write-Host "    - line-art-flat-colors-sdxl -> https://huggingface.co/Muapi/line-art-flat-colors-sdxl" -ForegroundColor Cyan
+    Write-Host "  Recommended for isometric tiles/objects:" -ForegroundColor Cyan
     Write-Host "    - Zavy's Cute Isometric Tiles (SDXL)  -> https://civarchive.com/models/340599?modelVersionId=381373" -ForegroundColor Cyan
     Write-Host "    - Wolfie's Isometric Scenes (SDXL)    -> https://civitai.com/models/593055/wolfies-isometric-scenes-sdxl-concept" -ForegroundColor Cyan
     Write-Host "    - DarkoIsometricStyle (SDXL)          -> https://civitai.com/models/1954920/darkoisometricstyle" -ForegroundColor Cyan
