@@ -386,41 +386,47 @@ def generate_single(server: str, key: str, seed: int, use_img2img: bool = False,
     return spec["out"]
 
 
-def make_bear_reference(server: str, seed: int) -> Path:
+def make_bear_reference(server: str, seed: int, size: int = 512) -> Path:
     """Generate a single consistent voxel polar bear reference on white."""
     prompt = apply_lora(
-        f"{STYLE_PREFIX}single cute polar bear character design, standing facing forward, "
-        "small black eyes, rounded ears, white fur, full body visible, "
-        "centered on pure white background, no text, no watermark, no border, no shadow"
+        "voxel style, low poly, Fez-like, blocky 3D, anthropomorphic adult polar bear character, "
+        "standing upright, humanoid posture, facing forward, full body visible, "
+        "wearing a blue hoodie and dark blue jeans, white fur, friendly smile, "
+        "adult proportions, no gloves, no headband, "
+        "3D render, soft directional lighting, subtle cast shadow, ambient occlusion, "
+        "centered on pure white background, no text, no watermark, no border, "
+        "isolated character"
     )
     out = PREVIEW / "characters/bear-reference.png"
-    workflow = base_workflow(1024, 1024, prompt, NEGATIVE_SPRITE, seed)
+    negative = f"{NEGATIVE_SPRITE}, {NEGATIVE_OBJECT}, baby, cub, child, flat shading, 2d illustration, cartoon"
+    workflow = base_workflow(1024, 1024, prompt, negative, seed)
     prompt_id = submit(server, workflow)
     print(f"[bear-reference] queued {prompt_id}")
     entry = poll_until_done(server, prompt_id)
     images = entry.get("outputs", {}).get("7", {}).get("images", [])
     download_image(server, images[0]["filename"], images[0].get("subfolder", ""), out)
     with Image.open(out).convert("RGBA") as img:
-        isolate_largest_sprite(img, 512).save(out)
+        isolate_largest_sprite(img, size).save(out)
     return out
 
 
 def make_bear_direction(server: str, direction: str, reference: Path, seed: int) -> Path:
     """Generate one direction frame using the reference color/style in prompt."""
     directions = {
-        "up": "seen from behind, walking away, back view, facing away",
-        "right": "side view walking to the right, facing right",
-        "down": "front view walking toward viewer, facing camera",
-        "left": "side view walking to the left, facing left",
+        "up": "seen from behind, walking away, back view, facing away, upright humanoid posture",
+        "right": "side view walking to the right, facing right, upright humanoid posture",
+        "down": "front view walking toward viewer, facing camera, upright humanoid posture",
+        "left": "side view walking to the left, facing left, upright humanoid posture",
     }
     prompt = apply_lora(
-        f"{STYLE_PREFIX}single cute polar bear character, same voxel design as reference, "
+        "anthropomorphic adult polar bear character, same voxel design and outfit as reference, "
+        "wearing blue hoodie and dark blue jeans, white fur, friendly smile, adult proportions, "
         f"{directions[direction]}, "
-        "small black eyes, rounded ears, white fur, full body visible, "
         "centered on pure white background, no text, no watermark, no border, no shadow"
     )
     out = PREVIEW / f"characters/bear-{direction}.png"
-    workflow = base_workflow(1024, 1024, prompt, NEGATIVE_SPRITE, seed)
+    negative = f"{NEGATIVE_SPRITE}, {NEGATIVE_OBJECT}, baby, cub, child, flat shading, 2d illustration, cartoon"
+    workflow = base_workflow(1024, 1024, prompt, negative, seed)
     prompt_id = submit(server, workflow)
     print(f"[bear-{direction}] queued {prompt_id}")
     entry = poll_until_done(server, prompt_id)
@@ -467,6 +473,33 @@ def assemble_bear_sheet(directions: dict[str, Path]) -> Path:
     out.parent.mkdir(parents=True, exist_ok=True)
     sheet.save(out)
     print(f"  assembled {out}")
+    return out
+
+
+def make_bear_reference_preview(server: str, seed: int) -> Path:
+    """Generate a front-facing reference and build a preview sheet that repeats it."""
+    ref = make_bear_reference(server, seed)
+
+    # Build a 128x128 cell from the 512x512 reference.
+    with Image.open(ref).convert("RGBA") as img:
+        cell = 128
+        scale = cell / max(img.size)
+        new_size = (int(img.width * scale), int(img.height * scale))
+        img = img.resize(new_size, Image.Resampling.LANCZOS)
+        frame = Image.new("RGBA", (cell, cell), (255, 255, 255, 0))
+        x = (cell - img.width) // 2
+        y = (cell - img.height) // 2
+        frame.paste(img, (x, y), img)
+
+    sheet = Image.new("RGBA", (cell * 4, cell * 8), (255, 255, 255, 0))
+    for row in range(8):
+        for col in range(4):
+            sheet.paste(frame, (col * cell, row * cell), frame)
+
+    out = PREVIEW / "characters/polar-bear-preview.png"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    sheet.save(out)
+    print(f"  assembled preview {out}")
     return out
 
 
@@ -540,6 +573,7 @@ def main() -> None:
     parser.add_argument("--preview", choices=list(ASSETS.keys()), help="Generate one preview asset")
     parser.add_argument("--preview-all", action="store_true", help="Generate all single preview assets")
     parser.add_argument("--preview-bear", action="store_true", help="Generate polar bear reference + directions + sheet")
+    parser.add_argument("--preview-bear-ref", action="store_true", help="Generate front-facing reference preview sheet only")
     parser.add_argument("--preview-tiles", action="store_true", help="Generate tile atlas")
     parser.add_argument("--promote", action="store_true", help="Copy previews to active asset folders")
     parser.add_argument("--no-lora", action="store_true", help="Use CartoonXL without the Voxel XL LoRA (not voxel style)")
@@ -582,6 +616,13 @@ def main() -> None:
             assemble_bear_sheet(directions)
         except Exception as exc:
             print(f"[polar-bear] failed: {exc}", file=sys.stderr)
+            sys.exit(1)
+
+    if args.preview_bear_ref:
+        try:
+            make_bear_reference_preview(args.server, args.seed)
+        except Exception as exc:
+            print(f"[bear-reference-preview] failed: {exc}", file=sys.stderr)
             sys.exit(1)
 
     if args.preview_tiles:
