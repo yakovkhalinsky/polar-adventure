@@ -21,7 +21,7 @@
   "4": {
     "inputs": {
       "model": ["1", 0],
-      "config": "SD1.x, Attention Injection, attn_sharing",
+      "config": "SD15, Attention Injection, attn_sharing",
       "weight": 1.0
     },
     "class_type": "LayeredDiffusionApply"
