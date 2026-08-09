@@ -441,7 +441,7 @@ def assemble_bear_sheet(directions: dict[str, Path]) -> Path:
     For now each row repeats the same direction frame 4 times.
     """
     cell = 128
-    sheet = Image.new("RGBA", (cell * 4, cell * 8), (255, 255, 255, 255))
+    sheet = Image.new("RGBA", (cell * 4, cell * 8), (255, 255, 255, 0))
 
     order = ["up", "right", "down", "left"]
     frames: dict[str, Image.Image] = {}
