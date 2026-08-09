@@ -28,7 +28,7 @@ PREVIEW = OUT / "generated"
 
 
 VOXEL_LORA = "VoxelXL_v1.safetensors"
-VOXEL_LORA_WEIGHT = 0.85
+VOXEL_LORA_WEIGHT = 0.6
 
 
 def apply_lora(positive: str) -> str:
@@ -189,9 +189,10 @@ NEGATIVE_SPRITE = (
 
 NEGATIVE_SHEET = NEGATIVE_SPRITE + ", inconsistent character, different poses per frame"
 
-STYLE_PREFIX = "voxel style, low poly, Fez-like, blocky 3D, isometric, cute, "
+STYLE_PREFIX = "voxel style, low poly, Fez-like, blocky 3D, isometric, cute "
 SINGLE_OBJECT = (
-    f"{STYLE_PREFIX}one single centered game asset taking up most of the canvas, "
+    "one single centered game asset, the asset is the main subject, "
+    f"{STYLE_PREFIX}, "
     "pure white background, large empty white margin around it, "
     "no text, no watermark, no border, no frame, isolated object"
 )
@@ -302,7 +303,7 @@ def isolate_largest_sprite(img: Image.Image, target_size: int, bg_threshold: int
     bg_b = sum(c[2] for c in corners) // 4
 
     # Build a transparency mask: pixels close to the corner color become transparent.
-    pixels = list(rgba.getdata())
+    pixels = list(rgba.get_flattened_data())
     new_pixels = []
     for r, g, b, a in pixels:
         dist = abs(r - bg_r) + abs(g - bg_g) + abs(b - bg_b)
@@ -522,11 +523,15 @@ def main() -> None:
     parser.add_argument("--preview-tiles", action="store_true", help="Generate tile atlas")
     parser.add_argument("--promote", action="store_true", help="Copy previews to active asset folders")
     parser.add_argument("--no-lora", action="store_true", help="Use CartoonXL without the Voxel XL LoRA (not voxel style)")
+    parser.add_argument("--lora-weight", type=float, default=None, help="Override Voxel XL LoRA strength (default 0.6)")
     args = parser.parse_args()
 
     if args.no_lora:
         global VOXEL_LORA
         VOXEL_LORA = None
+    elif args.lora_weight is not None:
+        global VOXEL_LORA_WEIGHT
+        VOXEL_LORA_WEIGHT = args.lora_weight
 
     if args.promote:
         promote()
