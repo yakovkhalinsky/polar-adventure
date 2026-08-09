@@ -57,6 +57,14 @@ function Write-Warn    ($msg) { Write-Host "[WARN]    $msg" -ForegroundColor Yel
 function Write-Error   ($msg) { Write-Host "[ERROR]   $msg" -ForegroundColor Red }
 
 # ---------------------------------------------------------------------------
+# Node-specific requirements files / post-install commands
+# ---------------------------------------------------------------------------
+$NODE_REQUIREMENTS = @{
+    "ComfyUI-Tripo"      = "requirements.txt"
+    "ComfyUI-layerdiffuse" = @("requirements.txt", "install.py")
+}
+
+# ---------------------------------------------------------------------------
 # Verify ComfyUI Desktop location
 # ---------------------------------------------------------------------------
 if (-not (Test-Path $ComfyUiPath)) {
@@ -298,6 +306,49 @@ $nodes = @(
     @{ Repo = "https://github.com/VAST-AI-Research/ComfyUI-Tripo.git"; Name = "ComfyUI-Tripo" }
 )
 
+function Install-NodeRequirements {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$TargetPath,
+        [Parameter(Mandatory = $true)]
+        [string]$NodeName
+    )
+
+    $reqConfig = $NODE_REQUIREMENTS[$NodeName]
+    if (-not $reqConfig) { return }
+
+    $items = if ($reqConfig -is [array]) { $reqConfig } else { @($reqConfig) }
+    foreach ($item in $items) {
+        $reqFile = Join-Path $TargetPath $item
+        if (Test-Path $reqFile) {
+            if ($item -eq "install.py") {
+                Write-Info "  Running install.py for $NodeName..."
+                try {
+                    Push-Location $TargetPath
+                    & python "install.py"
+                    Pop-Location
+                    Write-Success "  install.py completed for $NodeName"
+                }
+                catch {
+                    Write-Warn "  install.py failed for ${NodeName}: $_"
+                    Write-Warn "  You may need to run manually: cd '$TargetPath'; python install.py"
+                }
+            }
+            elseif ($item.EndsWith(".txt")) {
+                Write-Info "  Installing Python requirements for $NodeName..."
+                try {
+                    & python -m pip install -r $reqFile
+                    Write-Success "  Requirements installed for $NodeName"
+                }
+                catch {
+                    Write-Warn "  Could not install requirements for ${NodeName}: $_"
+                    Write-Warn "  You may need to run: python -m pip install -r '$reqFile'"
+                }
+            }
+        }
+    }
+}
+
 if (-not $SkipNodes) {
     Write-Host ""
     Write-Info "Installing custom nodes..."
@@ -320,28 +371,15 @@ if (-not $SkipNodes) {
             try {
                 git clone --depth=1 $node.Repo $target
                 Write-Success "Installed: $($node.Name)"
-
-                # Install node-specific Python dependencies if a requirements file exists.
-                if ($node.Name -eq "ComfyUI-Tripo") {
-                    $reqFile = Join-Path $target "requirements.txt"
-                    if (Test-Path $reqFile) {
-                        Write-Info "  Installing Python requirements for $($node.Name)..."
-                        try {
-                            & python -m pip install -r $reqFile
-                            Write-Success "  Requirements installed for $($node.Name)"
-                        }
-                        catch {
-                            Write-Warn "  Could not install requirements for $($node.Name): $_"
-                            Write-Warn "  You may need to run: python -m pip install -r $reqFile"
-                        }
-                    }
-                }
             }
             catch {
                 Write-Error "FAILED: $_"
                 Write-Error "Make sure git is on your PATH."
+                continue
             }
         }
+
+        Install-NodeRequirements -TargetPath $target -NodeName $node.Name
     }
 
     Write-Host ""
