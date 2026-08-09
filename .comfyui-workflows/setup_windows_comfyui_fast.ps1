@@ -1,10 +1,11 @@
 #Requires -Version 7.2
 <#
 .SYNOPSIS
-    Downloads the recommended model stack for Polar Adventures into a local ComfyUI Desktop install.
+    Downloads the recommended SDXL model stack for Fez-like voxel game assets into a local ComfyUI Desktop install.
 
 .DESCRIPTION
     Faster, resumable, parallel version of the original setup script.
+    - Installs CartoonXL SDXL base + Voxel XL LoRA for Fez-like voxel game assets
     - Uses BITS/aria2/curl-style resume where possible (falls back to Invoke-WebRequest)
     - Runs downloads in parallel with progress bars
     - Verifies partial files and resumes interrupted transfers
@@ -33,7 +34,8 @@
     .\setup_windows_comfyui_fast.ps1 -ComfyUiPath "C:\Users\yakov\AppData\Local\Comfy-Desktop\ComfyUI-Installs\ComfyUI\ComfyUI"
 
 .NOTE
-    CartoonXL is an SDXL 1.0 checkpoint. You need a ComfyUI install that can run SDXL (most modern installs do).
+    CartoonXL is an SDXL 1.0 base checkpoint. Voxel XL LoRA adds the Fez-like voxel style.
+    You need a ComfyUI install that can run SDXL (most modern installs do).
     The Civitai download URL may redirect to a signed B2 link; curl.exe and Invoke-WebRequest both follow redirects.
 #>
 param(
@@ -193,9 +195,14 @@ $downloads = @(
         Dest = Join-Path $modelsDir "checkpoints\v1-5-pruned-emaonly.safetensors"
     },
     @{
-        Name = "CartoonXL SDXL checkpoint (flat vector game style)"
+        Name = "CartoonXL SDXL checkpoint (base for voxel style)"
         Url  = "https://civitai.com/api/download/models/437130"
         Dest = Join-Path $modelsDir "checkpoints\cartoonxl_v10.safetensors"
+    },
+    @{
+        Name = "Voxel XL LoRA (Fez-like voxel style)"
+        Url  = "https://huggingface.co/Fictiverse/Voxel_XL_Lora/resolve/main/VoxelXL_v1.safetensors?download=true"
+        Dest = Join-Path $modelsDir "loras\VoxelXL_v1.safetensors"
     },
     @{
         Name = "Improved VAE"
@@ -268,20 +275,18 @@ if (-not $SkipModels) {
 
     Write-Host ""
     Write-Warn "Model notes:"
-    Write-Info "  CartoonXL is an SDXL checkpoint. After install, use it in workflows:"
-    Write-Info "    - Prompt keywords: cartoon, cartoon style, flat, cute, kawaii, clipart"
-    Write-Info "    - Recommended: 28-40 steps, CFG 7-8, DPM++ 2M Karras, 1024x1024 then downscale"
+    Write-Info "  CartoonXL is the SDXL base checkpoint."
+    Write-Info "  Voxel XL LoRA is loaded in the asset pipeline to produce Fez-like voxel art."
+    Write-Info "    - Trigger word: voxel style"
+    Write-Info "    - Prompt keywords: voxel style, low poly, isometric, Fez-like, blocky, retro 3D"
+    Write-Info "    - Recommended: 30-40 steps, CFG 7-8, DPM++ 2M Karras, 1024x1024 then downscale"
 
     Write-Host ""
-    Write-Warn "LoRA note:"
-    Write-Info "  You must download LoRAs manually because most sources require login."
-    Write-Info "  Put them in: $(Join-Path $modelsDir 'loras')"
-    Write-Info "  Recommended for flat-vector characters:"
-    Write-Info "    - line-art-flat-colors-sdxl -> https://huggingface.co/Muapi/line-art-flat-colors-sdxl"
-    Write-Info "  Recommended for isometric tiles/objects:"
-    Write-Info "    - Zavy's Cute Isometric Tiles (SDXL) -> https://civarchive.com/models/340599?modelVersionId=381373"
-    Write-Info "    - Wolfie's Isometric Scenes (SDXL)  -> https://civitai.com/models/593055/wolfies-isometric-scenes-sdxl-concept"
-    Write-Info "    - DarkoIsometricStyle (SDXL)         -> https://civitai.com/models/1954920/darkoisometricstyle"
+    Write-Warn "Optional LoRAs:"
+    Write-Info "  Put extras in: $(Join-Path $modelsDir 'loras')"
+    Write-Info "  - Zavy's Cute Isometric Tiles (SDXL) -> https://civarchive.com/models/340599?modelVersionId=381373"
+    Write-Info "  - Wolfie's Isometric Scenes (SDXL)  -> https://civitai.com/models/593055/wolfies-isometric-scenes-sdxl-concept"
+    Write-Info "  - DarkoIsometricStyle (SDXL)         -> https://civitai.com/models/1954920/darkoisometricstyle"
 }
 
 # ---------------------------------------------------------------------------
