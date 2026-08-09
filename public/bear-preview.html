@@ -114,11 +114,14 @@
       let direction = 1;
       let lastTime = 0;
 
+      // Cache-bust the spritesheet so hard refreshes are not needed after
+      // each generation/promote cycle.
+      const sheetUrl = 'assets/characters/polar-bear.png?v=' + Date.now();
       const image = new Image();
-      image.src = 'assets/characters/polar-bear.png';
+      image.src = sheetUrl;
       image.onload = () => {
         sheet = image;
-        sheetImg.src = image.src;
+        sheetImg.src = sheetUrl;
         requestAnimationFrame(loop);
       };
       image.onerror = () => {
