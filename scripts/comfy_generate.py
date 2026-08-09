@@ -15,10 +15,12 @@ from __future__ import annotations
 import argparse
 import sys
 import time
+from collections import deque
 from pathlib import Path
 from typing import Any
 from urllib.parse import urljoin
 
+import numpy as np
 import requests
 from PIL import Image
 
@@ -301,46 +303,86 @@ def download_image(server: str, filename: str, subfolder: str, dest: Path) -> No
     print(f"  downloaded {dest}")
 
 
-def isolate_largest_sprite(img: Image.Image, target_size: int, bg_threshold: int = 30) -> Image.Image:
-    """Crop to the largest foreground region and make the dominant background transparent.
+def upload_image(server: str, path: Path) -> str:
+    """Upload a local image to ComfyUI's input folder and return the filename."""
+    url = urljoin(server, "/upload/image")
+    with path.open("rb") as f:
+        resp = requests.post(
+            url,
+            files={"image": (path.name, f, "image/png")},
+            data={"type": "input"},
+            timeout=60,
+        )
+    resp.raise_for_status()
+    data = resp.json()
+    print(f"  uploaded {path} -> {data['name']}")
+    return data["name"]
 
-    Works for white, grey, blue, or any near-solid background by comparing each pixel
-    to the average corner color.
+
+def isolate_largest_sprite(img: Image.Image, target_size: int, raw_path: Path | None = None) -> Image.Image:
+    """Crop to the largest foreground region and make the background transparent.
+
+    Uses a flood fill from the image borders with an adaptive color tolerance.
+    This handles solid backgrounds, gradients, and slight vignetting better than
+    corner sampling alone.
     """
     rgba = img.convert("RGBA")
-    width, height = rgba.size
+    if raw_path is not None:
+        raw_path.parent.mkdir(parents=True, exist_ok=True)
+        rgba.save(raw_path)
 
-    # Sample the four corners to estimate the background color.
-    corners = [
-        rgba.getpixel((2, 2)),
-        rgba.getpixel((width - 3, 2)),
-        rgba.getpixel((2, height - 3)),
-        rgba.getpixel((width - 3, height - 3)),
-    ]
-    bg_r = sum(c[0] for c in corners) // 4
-    bg_g = sum(c[1] for c in corners) // 4
-    bg_b = sum(c[2] for c in corners) // 4
+    arr = np.array(rgba).astype(np.float32)
+    height, width, _ = arr.shape
 
-    # Build a transparency mask: pixels close to the corner color become transparent.
-    pixels = list(rgba.get_flattened_data())
-    new_pixels = []
-    for r, g, b, a in pixels:
-        dist = abs(r - bg_r) + abs(g - bg_g) + abs(b - bg_b)
-        if dist < bg_threshold:
-            new_pixels.append((255, 255, 255, 0))
-        else:
-            # Slightly feather near-background pixels for smoother edges.
-            alpha = a if dist > bg_threshold * 2 else int(a * dist / (bg_threshold * 2))
-            new_pixels.append((r, g, b, alpha))
-    rgba.putdata(new_pixels)
+    # Gather border pixels and use their median color as the background seed.
+    border: list[np.ndarray] = []
+    for x in range(width):
+        border.append(arr[0, x, :3])
+        border.append(arr[height - 1, x, :3])
+    for y in range(height):
+        border.append(arr[y, 0, :3])
+        border.append(arr[y, width - 1, :3])
+    border_arr = np.array(border)
+    seed = np.median(border_arr, axis=0)
+
+    # Adaptive tolerance: cover normal variation plus a generous margin.
+    mad = np.median(np.abs(border_arr - seed).sum(axis=1))
+    tol = max(55, int(mad * 3.0))
+
+    # Flood fill the background from every edge pixel that matches the seed.
+    bg = np.zeros((height, width), bool)
+    q: deque[tuple[int, int]] = deque()
+    for y in range(height):
+        for x in (0, width - 1):
+            if not bg[y, x] and np.abs(arr[y, x, :3] - seed).sum() < tol * 2:
+                bg[y, x] = True
+                q.append((y, x))
+    for x in range(width):
+        for y in (0, height - 1):
+            if not bg[y, x] and np.abs(arr[y, x, :3] - seed).sum() < tol * 2:
+                bg[y, x] = True
+                q.append((y, x))
+
+    while q:
+        y, x = q.popleft()
+        for dy in (-1, 0, 1):
+            for dx in (-1, 0, 1):
+                ny, nx = y + dy, x + dx
+                if 0 <= ny < height and 0 <= nx < width and not bg[ny, nx]:
+                    if np.abs(arr[ny, nx, :3] - seed).sum() < tol:
+                        bg[ny, nx] = True
+                        q.append((ny, nx))
+
+    arr[bg, 3] = 0
 
     # Crop to the non-transparent bounding box.
-    alpha = rgba.split()[-1]
-    bbox = alpha.getbbox()
-    if bbox:
-        crop = rgba.crop(bbox)
-    else:
-        crop = rgba
+    alpha = arr[:, :, 3]
+    coords = np.argwhere(alpha > 0)
+    if len(coords) == 0:
+        return Image.new("RGBA", (target_size, target_size), (255, 255, 255, 0))
+    y1, x1 = coords.min(axis=0)
+    y2, x2 = coords.max(axis=0) + 1
+    crop = Image.fromarray(arr.astype(np.uint8)).crop((x1, y1, x2, y2))
 
     # Scale to fit inside target with padding.
     scale = target_size / max(crop.size) * 0.85
@@ -379,95 +421,131 @@ def generate_single(server: str, key: str, seed: int, use_img2img: bool = False,
     download_image(server, images[0]["filename"], images[0].get("subfolder", ""), spec["out"])
 
     with Image.open(spec["out"]).convert("RGBA") as img:
-        isolated = isolate_largest_sprite(img, size)
+        isolated = isolate_largest_sprite(img, size, raw_path=spec["out"].with_suffix(".raw.png"))
         isolated.save(spec["out"])
         print(f"  isolated -> {size}x{size}")
 
     return spec["out"]
 
 
-def make_bear_reference(server: str, seed: int, size: int = 512) -> Path:
-    """Generate a single consistent voxel polar bear reference on white."""
-    prompt = apply_lora(
-        "voxel style, low poly, Fez-like, blocky 3D, anthropomorphic adult polar bear character, "
-        "standing upright, humanoid posture, facing forward, full body visible, "
-        "wearing a blue hoodie and dark blue jeans, white fur, friendly smile, "
-        "adult proportions, no gloves, no headband, "
-        "3D render, soft directional lighting, subtle cast shadow, ambient occlusion, "
-        "centered on pure white background, no text, no watermark, no border, "
-        "isolated character"
+def make_bear_reference(server: str, seed: int, size: int = 512,
+                        direction: str = "down") -> Path:
+    """Generate a single consistent adult polar bear reference on white for a given direction."""
+    direction_prompts = {
+        "up": "seen from behind, back view, walking away from camera, facing away",
+        "right": "side view facing right, walking to the right, profile view",
+        "down": "front view facing camera, walking toward viewer",
+        "left": "side view facing left, walking to the left, profile view",
+    }
+    prompt = (
+        "3D rendered anthropomorphic adult male polar bear character, voxel style, low poly, Fez-like, "
+        "realistic adult human proportions, seven heads tall, tall slender man-like body, "
+        "very long muscular humanoid legs, narrow waist, very broad shoulders, "
+        "small head relative to body, elongated mature snout, serious adult expression, "
+        f"{direction_prompts[direction]}, "
+        "wearing a solid blue hoodie with drawstrings and dark blue denim jeans, white fur, "
+        "no gloves, no headband, full length dark pants, "
+        "soft directional studio lighting, ambient occlusion, subtle cast shadow, "
+        "pure white background, isolated character, centered, "
+        "no text, no watermark, no border"
     )
-    out = PREVIEW / "characters/bear-reference.png"
-    negative = f"{NEGATIVE_SPRITE}, {NEGATIVE_OBJECT}, baby, cub, child, flat shading, 2d illustration, cartoon"
-    workflow = base_workflow(1024, 1024, prompt, negative, seed)
+    out = PREVIEW / f"characters/bear-reference-{direction}.png"
+    negative = (
+        f"{NEGATIVE_SPRITE}, {NEGATIVE_OBJECT}, baby, cub, child, toddler, chibi, kawaii, "
+        "cute, big eyes, large eyes, round face, big head, short legs, stubby legs, "
+        "3 heads tall, 4 heads tall, belly, overweight, chubby, "
+        "white pants, light pants, grey pants, bare legs, shorts, skirt, "
+        "cartoon, anime, mascot, plushie, toy, figurine, Funko, collectable, "
+        "flat shading, 2d illustration, white hoodie, grey background, textured background, photograph"
+    )
+    workflow = base_workflow(1024, 1024, prompt, negative, seed, cfg=9.0, steps=40)
     prompt_id = submit(server, workflow)
-    print(f"[bear-reference] queued {prompt_id}")
+    print(f"[bear-reference-{direction}] queued {prompt_id}")
     entry = poll_until_done(server, prompt_id)
     images = entry.get("outputs", {}).get("7", {}).get("images", [])
     download_image(server, images[0]["filename"], images[0].get("subfolder", ""), out)
     with Image.open(out).convert("RGBA") as img:
-        isolate_largest_sprite(img, size).save(out)
+        isolate_largest_sprite(img, size, raw_path=out.with_suffix(".raw.png")).save(out)
     return out
 
 
-def make_bear_direction(server: str, direction: str, reference: Path, seed: int) -> Path:
-    """Generate one direction frame using the reference color/style in prompt."""
+def make_bear_direction(server: str, direction: str, reference: Path, seed: int,
+                        pose: str = "") -> Path:
+    """Generate one direction frame using img2img from the reference for consistency."""
     directions = {
         "up": "seen from behind, walking away, back view, facing away, upright humanoid posture",
         "right": "side view walking to the right, facing right, upright humanoid posture",
-        "down": "front view walking toward viewer, facing camera, upright humanoid posture",
         "left": "side view walking to the left, facing left, upright humanoid posture",
+        "down": "front view walking toward viewer, facing camera, upright humanoid posture",
     }
-    prompt = apply_lora(
-        "anthropomorphic adult polar bear character, same voxel design and outfit as reference, "
-        "wearing blue hoodie and dark blue jeans, white fur, friendly smile, adult proportions, "
-        f"{directions[direction]}, "
-        "centered on pure white background, no text, no watermark, no border, no shadow"
+    prompt = (
+        "3D rendered anthropomorphic adult male polar bear character, same voxel design and outfit as reference, "
+        "realistic adult human proportions, seven heads tall, tall slender man-like body, "
+        "very long muscular humanoid legs, narrow waist, very broad shoulders, "
+        "small head relative to body, elongated mature snout, serious adult expression, "
+        "wearing a solid blue hoodie with drawstrings and dark blue denim jeans, white fur, "
+        f"{directions[direction]}, {pose}, "
+        "soft directional studio lighting, ambient occlusion, subtle cast shadow, "
+        "pure white background, isolated character, centered, "
+        "no text, no watermark, no border"
     )
-    out = PREVIEW / f"characters/bear-{direction}.png"
-    negative = f"{NEGATIVE_SPRITE}, {NEGATIVE_OBJECT}, baby, cub, child, flat shading, 2d illustration, cartoon"
-    workflow = base_workflow(1024, 1024, prompt, negative, seed)
+    negative = (
+        f"{NEGATIVE_SPRITE}, {NEGATIVE_OBJECT}, baby, cub, child, toddler, chibi, kawaii, "
+        "cute, big eyes, large eyes, round face, big head, short legs, stubby legs, "
+        "3 heads tall, 4 heads tall, belly, overweight, chubby, "
+        "cartoon, anime, mascot, plushie, toy, figurine, Funko, collectable, "
+        "flat shading, 2d illustration, white hoodie, grey background, textured background, photograph"
+    )
+    out = PREVIEW / f"characters/bear-{direction}-{seed}.png"
+    # Upload the reference to ComfyUI's input folder so img2img can load it.
+    uploaded_name = upload_image(server, reference)
+    # Use Voxel LoRA for consistent style; moderate denoise keeps reference while allowing pose change.
+    workflow = img2img_workflow(1024, 1024, prompt, negative, seed, Path(uploaded_name), denoise=0.55)
     prompt_id = submit(server, workflow)
-    print(f"[bear-{direction}] queued {prompt_id}")
+    print(f"[bear-{direction}-{seed}] queued {prompt_id}")
     entry = poll_until_done(server, prompt_id)
     images = entry.get("outputs", {}).get("7", {}).get("images", [])
     download_image(server, images[0]["filename"], images[0].get("subfolder", ""), out)
 
     with Image.open(out).convert("RGBA") as img:
-        isolate_largest_sprite(img, 512).save(out)
-        print(f"  isolated bear-{direction}")
+        isolate_largest_sprite(img, 512, raw_path=out.with_suffix(".raw.png")).save(out)
+        print(f"  isolated bear-{direction}-{seed}")
 
     return out
 
 
-def assemble_bear_sheet(directions: dict[str, Path]) -> Path:
+def assemble_bear_sheet(directions: dict[str, list[Path]]) -> Path:
     """Assemble 4 directions x 8 rows into a 512x1024 spritesheet.
 
     Rows: walk-up, walk-right, walk-down, walk-left, swim, attack, push, idle.
-    For now each row repeats the same direction frame 4 times.
+    Each direction can supply 1 or more frames; frames repeat to fill 4 cols.
     """
     cell = 128
     sheet = Image.new("RGBA", (cell * 4, cell * 8), (255, 255, 255, 0))
 
     order = ["up", "right", "down", "left"]
-    frames: dict[str, Image.Image] = {}
+    frames: dict[str, list[Image.Image]] = {}
     for d in order:
-        img = Image.open(directions[d]).convert("RGBA")
-        # Scale/crop to cell, keeping centered.
-        scale = cell / max(img.size)
-        new_size = (int(img.width * scale), int(img.height * scale))
-        img = img.resize(new_size, Image.Resampling.LANCZOS)
-        frame = Image.new("RGBA", (cell, cell), (255, 255, 255, 0))
-        x = (cell - img.width) // 2
-        y = (cell - img.height) // 2
-        frame.paste(img, (x, y), img)
-        frames[d] = frame
+        frames[d] = []
+        for path in directions[d]:
+            img = Image.open(path).convert("RGBA")
+            # Scale/crop to cell, keeping centered.
+            scale = cell / max(img.size)
+            new_size = (int(img.width * scale), int(img.height * scale))
+            img = img.resize(new_size, Image.Resampling.LANCZOS)
+            frame = Image.new("RGBA", (cell, cell), (255, 255, 255, 0))
+            x = (cell - img.width) // 2
+            y = (cell - img.height) // 2
+            frame.paste(img, (x, y), img)
+            frames[d].append(frame)
 
     # Row mapping for walk directions.
     row_dirs = ["up", "right", "down", "left", "down", "down", "down", "down"]
     for row, d in enumerate(row_dirs):
+        direction_frames = frames[d]
         for col in range(4):
-            sheet.paste(frames[d], (col * cell, row * cell), frames[d])
+            frame = direction_frames[col % len(direction_frames)]
+            sheet.paste(frame, (col * cell, row * cell), frame)
 
     out = PREVIEW / "characters/polar-bear.png"
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -609,10 +687,24 @@ def main() -> None:
 
     if args.preview_bear:
         try:
-            ref = make_bear_reference(args.server, args.seed)
-            directions = {}
+            # Generate a direction-specific reference for each cardinal direction so the
+            # silhouettes actually read as up/right/down/left in the final sheet.
+            refs: dict[str, Path] = {}
             for d in ["up", "right", "down", "left"]:
-                directions[d] = make_bear_direction(args.server, d, ref, args.seed + hash(d) % 100000)
+                refs[d] = make_bear_reference(args.server, args.seed, direction=d)
+
+            directions: dict[str, list[Path]] = {}
+            for d in ["up", "right", "down", "left"]:
+                # Two alternating walk poses per direction, guided by the matching direction reference.
+                pose_a = make_bear_direction(
+                    args.server, d, refs[d], args.seed + hash(d) % 100000,
+                    pose="left leg forward, right leg back, left arm back, right arm forward"
+                )
+                pose_b = make_bear_direction(
+                    args.server, d, refs[d], args.seed + hash(d) % 100000 + 50000,
+                    pose="right leg forward, left leg back, right arm back, left arm forward"
+                )
+                directions[d] = [pose_a, pose_b]
             assemble_bear_sheet(directions)
         except Exception as exc:
             print(f"[polar-bear] failed: {exc}", file=sys.stderr)

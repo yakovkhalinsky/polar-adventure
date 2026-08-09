@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Polar Bear Asset Review</title>
+  <style>
+    :root {
+      --bg: #111827;
+      --card: #1f2937;
+      --text: #f9fafb;
+      --muted: #9ca3af;
+      --accent: #3b82f6;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+    header {
+      padding: 1.5rem 2rem;
+      border-bottom: 1px solid #374151;
+    }
+    header h1 { margin: 0 0 0.25rem; font-size: 1.5rem; }
+    header p { margin: 0; color: var(--muted); }
+    main { padding: 2rem; max-width: 1400px; margin: 0 auto; }
+    section { margin-bottom: 3rem; }
+    h2 { margin: 0 0 1rem; font-size: 1.25rem; color: var(--accent); }
+    .grid {
+      display: grid;
+      gap: 1.5rem;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    }
+    .card {
+      background: var(--card);
+      border-radius: 0.75rem;
+      padding: 1rem;
+      border: 1px solid #374151;
+    }
+    .card h3 { margin: 0 0 0.75rem; font-size: 1rem; color: var(--text); }
+    .card .meta { color: var(--muted); font-size: 0.8rem; margin-top: 0.5rem; }
+    .card img {
+      width: 100%;
+      height: auto;
+      border-radius: 0.5rem;
+      background:
+        linear-gradient(45deg, #ff0000 25%, transparent 25%, transparent 75%, #ff0000 75%, #ff0000),
+        linear-gradient(45deg, #ff0000 25%, #ffffff 25%, #ffffff 75%, #ff0000 75%, #ff0000);
+      background-size: 20px 20px;
+      background-position: 0 0, 10px 10px;
+      image-rendering: auto;
+    }
+    .sheet-stage {
+      display: flex;
+      gap: 1rem;
+      align-items: flex-start;
+      flex-wrap: wrap;
+    }
+    .sheet-stage canvas {
+      background:
+        linear-gradient(45deg, #ff0000 25%, transparent 25%, transparent 75%, #ff0000 75%, #ff0000),
+        linear-gradient(45deg, #ff0000 25%, #ffffff 25%, #ffffff 75%, #ff0000 75%, #ff0000);
+      background-size: 20px 20px;
+      background-position: 0 0, 10px 10px;
+      border-radius: 0.5rem;
+      max-width: 100%;
+      border: 1px solid #374151;
+    }
+    .controls {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    .controls button {
+      background: #374151;
+      color: var(--text);
+      border: 1px solid #4b5563;
+      border-radius: 0.375rem;
+      padding: 0.5rem 0.75rem;
+      cursor: pointer;
+      text-align: left;
+      font-size: 0.9rem;
+    }
+    .controls button:hover { background: #4b5563; }
+    .controls button.active { background: var(--accent); border-color: var(--accent); }
+    .note {
+      color: var(--muted);
+      font-size: 0.9rem;
+      max-width: 800px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Polar Bear Asset Review</h1>
+    <p>Review generated candidates and choose the next direction. Everything on this page is in <code>public/assets/generated/</code>.</p>
+  </header>
+
+  <main>
+    <section>
+      <h2>Direction References (latest)</h2>
+      <div class="grid">
+        <div class="card">
+          <h3>Front (down)</h3>
+          <img id="ref-down" alt="front reference" />
+          <div class="meta" id="ref-down-meta"></div>
+        </div>
+        <div class="card">
+          <h3>Left</h3>
+          <img id="ref-left" alt="left reference" />
+          <div class="meta" id="ref-left-meta"></div>
+        </div>
+        <div class="card">
+          <h3>Right</h3>
+          <img id="ref-right" alt="right reference" />
+          <div class="meta" id="ref-right-meta"></div>
+        </div>
+        <div class="card">
+          <h3>Back (up)</h3>
+          <img id="ref-up" alt="back reference" />
+          <div class="meta" id="ref-up-meta"></div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Assembled Spritesheet</h2>
+      <div class="sheet-stage">
+        <canvas id="stage" width="512" height="1024"></canvas>
+        <div class="controls">
+          <button data-row="0" class="active">Row 0: walk-up</button>
+          <button data-row="1">Row 1: walk-right</button>
+          <button data-row="2">Row 2: walk-down</button>
+          <button data-row="3">Row 3: walk-left</button>
+          <button data-row="4">Row 4: swim</button>
+          <button data-row="5">Row 5: attack</button>
+          <button data-row="6">Row 6: push</button>
+          <button data-row="7">Row 7: idle-breathe</button>
+        </div>
+      </div>
+      <p class="note">Click row buttons to preview animation. Red/white checkerboard shows transparency.</p>
+    </section>
+
+  </main>
+
+  <script>
+    const cacheBust = '?v=' + Date.now();
+    const paths = {
+      sheet: 'assets/generated/characters/polar-bear.png',
+      refDown: 'assets/generated/characters/bear-reference-down.png',
+      refLeft: 'assets/generated/characters/bear-reference-left.png',
+      refRight: 'assets/generated/characters/bear-reference-right.png',
+      refUp: 'assets/generated/characters/bear-reference-up.png',
+    };
+
+    function setImg(id, src) {
+      const el = document.getElementById(id);
+      if (el) el.src = src + cacheBust;
+    }
+
+    setImg('ref-down', paths.refDown);
+    setImg('ref-left', paths.refLeft);
+    setImg('ref-right', paths.refRight);
+    setImg('ref-up', paths.refUp);
+
+    document.getElementById('ref-down-meta').textContent = paths.refDown;
+    document.getElementById('ref-left-meta').textContent = paths.refLeft;
+    document.getElementById('ref-right-meta').textContent = paths.refRight;
+    document.getElementById('ref-up-meta').textContent = paths.refUp;
+
+    // Spritesheet preview stage
+    const canvas = document.getElementById('stage');
+    const ctx = canvas.getContext('2d');
+    const img = new Image();
+    img.src = paths.sheet + cacheBust;
+    let currentRow = 0;
+    let frame = 0;
+    const cols = 4;
+    const rows = 8;
+    const cell = 128;
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      if (!img.complete) return;
+      const sx = frame * cell;
+      const sy = currentRow * cell;
+      ctx.drawImage(img, sx, sy, cell, cell, 0, 0, cell * 4, cell * 4);
+    }
+
+    img.onload = () => {
+      draw();
+      setInterval(() => {
+        frame = (frame + 1) % cols;
+        draw();
+      }, 250);
+    };
+
+    document.querySelectorAll('.controls button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.controls button').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentRow = parseInt(btn.dataset.row, 10);
+        frame = 0;
+        draw();
+      });
+    });
+  </script>
+</body>
+</html>
