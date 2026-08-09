@@ -65,8 +65,10 @@ export class PolarBearEntity extends me.Entity {
     this.groundY = y;
   }
 
-  private createShadowTexture(): string {
-    // Build a small radial shadow texture on the fly and register it.
+  private createShadowTexture(): HTMLCanvasElement {
+    // Build a small radial shadow texture on the fly and pass it directly to
+    // the sprite. Avoids the asynchronous loader path, which can throw before
+    // the generated image is registered.
     const canvas = document.createElement('canvas');
     canvas.width = 32;
     canvas.height = 12;
@@ -76,13 +78,7 @@ export class PolarBearEntity extends me.Entity {
     grad.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, 32, 12);
-    const dataUrl = canvas.toDataURL();
-    me.loader.load({
-      name: 'polar-bear-shadow',
-      type: 'image',
-      src: dataUrl,
-    });
-    return 'polar-bear-shadow';
+    return canvas;
   }
 
   update(dt: number): boolean {
