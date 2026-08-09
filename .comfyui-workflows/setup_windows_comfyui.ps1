@@ -5,8 +5,8 @@
 
 .DESCRIPTION
     This script checks for ComfyUI Desktop in the default Electron install location, then
-    downloads the SD 1.5 checkpoint, VAE, isometric LoRAs, ControlNet models, and installs
-    the custom nodes needed by the polar-adventures asset pipeline.
+    downloads the SD 1.5 checkpoint, VAE, ControlNet models, and installs the custom nodes
+    needed by the polar-adventures asset pipeline.
 
 .PARAMETER ComfyUiPath
     Path to your ComfyUI Desktop folder. Defaults to the ComfyUI Desktop Electron install.
@@ -87,22 +87,22 @@ function Get-ModelFile {
 $downloads = @(
     @{
         Name = "SD 1.5 base checkpoint"
-        Url  = "https://huggingface.co/runwayml/stable-diffusion-v1-5/resolve/main/v1-5-pruned-emaonly.safetensors"
+        Url  = "https://huggingface.co/Comfy-Org/stable-diffusion-v1-5-archive/resolve/main/v1-5-pruned-emaonly.safetensors?download=true"
         Dest = Join-Path $modelsDir "checkpoints\v1-5-pruned-emaonly.safetensors"
     },
     @{
         Name = "Improved VAE"
-        Url  = "https://huggingface.co/stabilityai/sd-vae-ft-mse-original/resolve/main/vae-ft-mse-840000-ema-pruned.safetensors"
+        Url  = "https://huggingface.co/stabilityai/sd-vae-ft-mse-original/resolve/main/vae-ft-mse-840000-ema-pruned.safetensors?download=true"
         Dest = Join-Path $modelsDir "vae\vae-ft-mse-840000-ema-pruned.safetensors"
     },
     @{
         Name = "ControlNet OpenPose"
-        Url  = "https://huggingface.co/lllyasviel/ControlNet-v1-1/resolve/main/control_v11p_sd15_openpose.pth"
+        Url  = "https://huggingface.co/lllyasviel/ControlNet-v1-1/resolve/main/control_v11p_sd15_openpose.pth?download=true"
         Dest = Join-Path $modelsDir "controlnet\control_v11p_sd15_openpose.pth"
     },
     @{
         Name = "ControlNet Canny"
-        Url  = "https://huggingface.co/lllyasviel/ControlNet-v1-1/resolve/main/control_v11p_sd15_canny.pth"
+        Url  = "https://huggingface.co/lllyasviel/ControlNet-v1-1/resolve/main/control_v11p_sd15_canny.pth?download=true"
         Dest = Join-Path $modelsDir "controlnet\control_v11p_sd15_canny.pth"
     }
 )
@@ -114,13 +114,14 @@ if (-not $SkipModels) {
     }
 
     Write-Host "`nLoRA note:" -ForegroundColor Yellow
-    Write-Host "  You must download LoRAs manually from Civitai because they require login." -ForegroundColor Cyan
+    Write-Host "  You must download LoRAs manually because most sources require login." -ForegroundColor Cyan
     Write-Host "  Put them in: $(Join-Path $modelsDir 'loras')" -ForegroundColor Cyan
-    Write-Host "  Recommended:" -ForegroundColor Cyan
-    Write-Host "    - Zavy's Cute Isometric Tiles (SDXL)  -> https://civarchive.com/models/340599?modelVersionId=381373" -ForegroundColor Cyan
-    Write-Host "    - Wolfie's Isometric Scenes (SDXL)     -> https://civitai.com/models/593055/wolfies-isometric-scenes-sdxl-concept" -ForegroundColor Cyan
-    Write-Host "    - DarkoIsometricStyle (SDXL)           -> https://civitai.com/models/1954920/darkoisometricstyle" -ForegroundColor Cyan
+    Write-Host "  Hugging Face options:" -ForegroundColor Cyan
     Write-Host "    - Witchpot/icestage (arctic flavor)    -> https://huggingface.co/Witchpot/icestage" -ForegroundColor Cyan
+    Write-Host "  Civitai options (if you can reach the site):" -ForegroundColor Cyan
+    Write-Host "    - Zavy's Cute Isometric Tiles (SDXL)  -> https://civarchive.com/models/340599?modelVersionId=381373" -ForegroundColor Cyan
+    Write-Host "    - Wolfie's Isometric Scenes (SDXL)    -> https://civitai.com/models/593055/wolfies-isometric-scenes-sdxl-concept" -ForegroundColor Cyan
+    Write-Host "    - DarkoIsometricStyle (SDXL)          -> https://civitai.com/models/1954920/darkoisometricstyle" -ForegroundColor Cyan
 }
 
 # -----------------------------------------------------------------------------
@@ -128,8 +129,7 @@ if (-not $SkipModels) {
 # -----------------------------------------------------------------------------
 $nodes = @(
     @{ Repo = "https://github.com/huchenlei/ComfyUI-layerdiffuse.git"; Name = "ComfyUI-layerdiffuse" },
-    @{ Repo = "https://github.com/Jcd1230/rembg-comfyui-node.git"; Name = "rembg-comfyui-node" },
-    @{ Repo = "https://github.com/JosefKuchar/ComfyUI-AdvancedTiling.git"; Name = "ComfyUI-AdvancedTiling" }
+    @{ Repo = "https://github.com/Jcd1230/rembg-comfyui-node.git"; Name = "rembg-comfyui-node" }
 )
 
 if (-not $SkipNodes) {
@@ -151,8 +151,13 @@ if (-not $SkipNodes) {
             }
         }
     }
+
+    Write-Host "`nOptional node note:" -ForegroundColor Yellow
+    Write-Host "  ComfyUI-AdvancedTiling is optional. It can fail to install through ComfyUI Manager." -ForegroundColor Cyan
+    Write-Host "  If you want it, install from: https://github.com/JosefKuchar/ComfyUI-AdvancedTiling" -ForegroundColor Cyan
+    Write-Host "  The postprocess_assets.py script already handles basic tile masking." -ForegroundColor Cyan
 }
 
 Write-Host "`nSetup complete. Restart ComfyUI Desktop to load new models and nodes." -ForegroundColor Green
-Write-Host "Then run from the project repository:" -ForegroundColor Cyan
-Write-Host "  python3 .comfyui-workflows/generate_polar_assets_v3.py --mode sd15" -ForegroundColor Cyan
+Write-Host "Then import the test workflow:" -ForegroundColor Cyan
+Write-Host "  https://raw.githubusercontent.com/yakovkhalinsky/polar-adventure/main/.comfyui-workflows/polar_bear_single_sd15.json" -ForegroundColor Cyan
