@@ -189,52 +189,71 @@ NEGATIVE_SPRITE = (
 
 NEGATIVE_SHEET = NEGATIVE_SPRITE + ", inconsistent character, different poses per frame"
 
-STYLE_PREFIX = "voxel style, low poly, Fez-like, blocky 3D, isometric, cute "
+# Generic voxel style keywords. Objects avoid "isometric" because it pushes the model
+# toward full scene/platform renders; characters still look fine with it.
+VOXEL_STYLE_OBJECT = "voxel style, low poly, Fez-like, blocky 3D, cute "
+VOXEL_STYLE_CHAR = "voxel style, low poly, Fez-like, blocky 3D, isometric, cute "
+
 SINGLE_OBJECT = (
     "one single centered game asset, the asset is the main subject, "
-    f"{STYLE_PREFIX}, "
     "pure white background, large empty white margin around it, "
+    "floating object, no ground, no platform, no base, "
     "no text, no watermark, no border, no frame, isolated object"
 )
 
+NEGATIVE_OBJECT = (
+    "platform, ground, base, pedestal, scene, landscape, environment, "
+    "isometric scene, tile, block platform, water pool, grass patch, house, building, "
+    "multiple objects, collage, shadow, reflection, blurry, low quality"
+)
+
+
+def make_object_prompt(subject: str) -> str:
+    return f"{SINGLE_OBJECT}, {VOXEL_STYLE_OBJECT}, {subject}"
+
+
+def make_character_prompt(subject: str) -> str:
+    return f"{SINGLE_OBJECT}, {VOXEL_STYLE_CHAR}, {subject}"
+
+
 ASSETS: dict[str, dict[str, Any]] = {
     "rock": {
-        "prompt": f"{SINGLE_OBJECT}, grey arctic rock boulder, rough surface, small snow patches",
+        "prompt": make_object_prompt("grey arctic rock boulder, rough surface, small snow patches"),
         "size": 128,
         "out": PREVIEW / "objects/rock.png",
     },
     "iceberg": {
-        "prompt": f"{SINGLE_OBJECT}, tall blue ice crystal chunk, translucent ice, white highlights",
+        "prompt": make_object_prompt("tall blue ice crystal chunk, translucent ice, white highlights"),
         "size": 128,
         "out": PREVIEW / "objects/iceberg.png",
     },
     "tree": {
-        "prompt": f"{SINGLE_OBJECT}, snow covered pine tree, green needles, white snow cap",
+        "prompt": make_object_prompt("snow covered pine tree, green needles, white snow cap"),
         "size": 128,
         "out": PREVIEW / "objects/tree.png",
     },
     "snow-mound": {
-        "prompt": f"{SINGLE_OBJECT}, small mound of snow, smooth white surface, soft shadows",
+        "prompt": make_object_prompt("small mound of snow, smooth white surface, soft shadows"),
         "size": 128,
         "out": PREVIEW / "objects/snow-mound.png",
     },
     "igloo": {
-        "prompt": f"{SINGLE_OBJECT}, isometric igloo dome, white ice blocks, small brown entrance",
+        "prompt": make_object_prompt("single igloo dome, white ice blocks, small brown entrance"),
         "size": 128,
         "out": PREVIEW / "objects/igloo.png",
     },
     "sign": {
-        "prompt": f"{SINGLE_OBJECT}, wooden signpost with blank board and snow on top, no text",
+        "prompt": make_object_prompt("wooden signpost with blank board and snow on top, no text"),
         "size": 128,
         "out": PREVIEW / "objects/sign.png",
     },
     "fish": {
-        "prompt": f"{SINGLE_OBJECT}, frozen arctic fish, red and silver scales, side view",
+        "prompt": make_object_prompt("frozen arctic fish, red and silver scales, side view"),
         "size": 128,
         "out": PREVIEW / "objects/fish.png",
     },
     "penguin": {
-        "prompt": f"{SINGLE_OBJECT}, cute cartoon penguin standing upright, black and white body, orange beak and feet",
+        "prompt": make_character_prompt("cute cartoon penguin standing upright, black and white body, orange beak and feet"),
         "size": 128,
         "out": PREVIEW / "characters/penguin.png",
     },
@@ -344,10 +363,11 @@ def generate_single(server: str, key: str, seed: int, use_img2img: bool = False,
     # SDXL works best at native resolution; scale up and isolate/downscale.
     gen_size = 1024
 
+    negative = f"{NEGATIVE_SPRITE}, {NEGATIVE_OBJECT}"
     if use_img2img and guide and guide.exists():
-        workflow = img2img_workflow(gen_size, gen_size, prompt, NEGATIVE_SPRITE, seed, guide, denoise=0.55)
+        workflow = img2img_workflow(gen_size, gen_size, prompt, negative, seed, guide, denoise=0.55)
     else:
-        workflow = base_workflow(gen_size, gen_size, prompt, NEGATIVE_SPRITE, seed)
+        workflow = base_workflow(gen_size, gen_size, prompt, negative, seed)
 
     prompt_id = submit(server, workflow)
     print(f"[{key}] queued {prompt_id}")
