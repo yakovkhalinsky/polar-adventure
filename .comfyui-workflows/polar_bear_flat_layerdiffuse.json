@@ -1,0 +1,209 @@
+{
+  "1": {
+    "inputs": { "ckpt_name": "v1-5-pruned-emaonly.safetensors" },
+    "class_type": "CheckpointLoaderSimple"
+  },
+  "2": {
+    "inputs": {
+      "text": "blurry, low quality, deformed, extra limbs, bad anatomy, watermark, signature, text, letters, words, cropped, out of frame, worst quality, collage, multiple objects, scene, landscape, background elements, border, frame, shadow, realistic, photograph, duplicated, repeated pattern, many items, scattered, icon set, sprite sheet, atlas, depth of field, gradient background, noisy background, baby, cub, child, toddler, chibi, kawaii, cute, big eyes, large eyes, round face, big head, short legs, stubby legs, belly, overweight, chubby, gloves, mittens, wrist cuffs, barefoot, bare paws, no shoes, sandals, boots, high heels, white hoodie, black hoodie, blue hoodie, pink hoodie, red hoodie, ripped jeans, torn jeans, distressed jeans, holes in jeans, frayed jeans, shorts, skirt, bare chest, 3d rendered, smooth shading, detailed fabric, texture, soft shadows, grey background, textured background",
+      "clip": ["1", 1]
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "3": {
+    "inputs": {
+      "width": 512,
+      "height": 512,
+      "batch_size": 1
+    },
+    "class_type": "EmptyLatentImage"
+  },
+  "4": {
+    "inputs": {
+      "model": ["1", 0],
+      "config": "SD1.x, Attention Injection, attn_sharing",
+      "weight": 1.0
+    },
+    "class_type": "LayeredDiffusionApply"
+  },
+  "10": {
+    "inputs": {
+      "text": "flat vector game character, anthropomorphic adult male polar bear, clean thick dark outline, simple geometric shapes, solid flat colors, wearing a solid grey hoodie and plain blue denim jeans with no rips, white fur, black and white high-top sneakers, bare hands with visible claws, no gloves, no headband, __VIEW__, isometric game asset, transparent background, isolated character, centered, no text, no watermark, no border, no shadows, no gradients",
+      "clip": ["1", 1]
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "11": {
+    "inputs": {
+      "seed": 1337001,
+      "steps": 25,
+      "cfg": 7.0,
+      "sampler_name": "dpmpp_2m",
+      "scheduler": "karras",
+      "denoise": 1,
+      "model": ["4", 0],
+      "positive": ["10", 0],
+      "negative": ["2", 0],
+      "latent_image": ["3", 0]
+    },
+    "class_type": "KSampler"
+  },
+  "12": {
+    "inputs": {
+      "samples": ["11", 0],
+      "vae": ["1", 2]
+    },
+    "class_type": "VAEDecode"
+  },
+  "13": {
+    "inputs": {
+      "samples": ["11", 0],
+      "images": ["12", 0],
+      "sd_version": "SD15",
+      "sub_batch_size": 16
+    },
+    "class_type": "LayeredDiffusionDecodeRGBA"
+  },
+  "14": {
+    "inputs": {
+      "filename_prefix": "polar_bear___DIRECTION__",
+      "images": ["13", 0]
+    },
+    "class_type": "SaveImage"
+  },
+  "20": {
+    "inputs": {
+      "text": "flat vector game character, anthropomorphic adult male polar bear, clean thick dark outline, simple geometric shapes, solid flat colors, wearing a solid grey hoodie and plain blue denim jeans with no rips, white fur, black and white high-top sneakers, bare hands with visible claws, no gloves, no headband, __VIEW__, isometric game asset, transparent background, isolated character, centered, no text, no watermark, no border, no shadows, no gradients",
+      "clip": ["1", 1]
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "21": {
+    "inputs": {
+      "seed": 1337002,
+      "steps": 25,
+      "cfg": 7.0,
+      "sampler_name": "dpmpp_2m",
+      "scheduler": "karras",
+      "denoise": 1,
+      "model": ["4", 0],
+      "positive": ["20", 0],
+      "negative": ["2", 0],
+      "latent_image": ["3", 0]
+    },
+    "class_type": "KSampler"
+  },
+  "22": {
+    "inputs": {
+      "samples": ["21", 0],
+      "vae": ["1", 2]
+    },
+    "class_type": "VAEDecode"
+  },
+  "23": {
+    "inputs": {
+      "samples": ["21", 0],
+      "images": ["22", 0],
+      "sd_version": "SD15",
+      "sub_batch_size": 16
+    },
+    "class_type": "LayeredDiffusionDecodeRGBA"
+  },
+  "24": {
+    "inputs": {
+      "filename_prefix": "polar_bear___DIRECTION__",
+      "images": ["23", 0]
+    },
+    "class_type": "SaveImage"
+  },
+  "30": {
+    "inputs": {
+      "text": "flat vector game character, anthropomorphic adult male polar bear, clean thick dark outline, simple geometric shapes, solid flat colors, wearing a solid grey hoodie and plain blue denim jeans with no rips, white fur, black and white high-top sneakers, bare hands with visible claws, no gloves, no headband, __VIEW__, isometric game asset, transparent background, isolated character, centered, no text, no watermark, no border, no shadows, no gradients",
+      "clip": ["1", 1]
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "31": {
+    "inputs": {
+      "seed": 1337003,
+      "steps": 25,
+      "cfg": 7.0,
+      "sampler_name": "dpmpp_2m",
+      "scheduler": "karras",
+      "denoise": 1,
+      "model": ["4", 0],
+      "positive": ["30", 0],
+      "negative": ["2", 0],
+      "latent_image": ["3", 0]
+    },
+    "class_type": "KSampler"
+  },
+  "32": {
+    "inputs": {
+      "samples": ["31", 0],
+      "vae": ["1", 2]
+    },
+    "class_type": "VAEDecode"
+  },
+  "33": {
+    "inputs": {
+      "samples": ["31", 0],
+      "images": ["32", 0],
+      "sd_version": "SD15",
+      "sub_batch_size": 16
+    },
+    "class_type": "LayeredDiffusionDecodeRGBA"
+  },
+  "34": {
+    "inputs": {
+      "filename_prefix": "polar_bear___DIRECTION__",
+      "images": ["33", 0]
+    },
+    "class_type": "SaveImage"
+  },
+  "40": {
+    "inputs": {
+      "text": "flat vector game character, anthropomorphic adult male polar bear, clean thick dark outline, simple geometric shapes, solid flat colors, wearing a solid grey hoodie and plain blue denim jeans with no rips, white fur, black and white high-top sneakers, bare hands with visible claws, no gloves, no headband, __VIEW__, isometric game asset, transparent background, isolated character, centered, no text, no watermark, no border, no shadows, no gradients",
+      "clip": ["1", 1]
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "41": {
+    "inputs": {
+      "seed": 1337004,
+      "steps": 25,
+      "cfg": 7.0,
+      "sampler_name": "dpmpp_2m",
+      "scheduler": "karras",
+      "denoise": 1,
+      "model": ["4", 0],
+      "positive": ["40", 0],
+      "negative": ["2", 0],
+      "latent_image": ["3", 0]
+    },
+    "class_type": "KSampler"
+  },
+  "42": {
+    "inputs": {
+      "samples": ["41", 0],
+      "vae": ["1", 2]
+    },
+    "class_type": "VAEDecode"
+  },
+  "43": {
+    "inputs": {
+      "samples": ["41", 0],
+      "images": ["42", 0],
+      "sd_version": "SD15",
+      "sub_batch_size": 16
+    },
+    "class_type": "LayeredDiffusionDecodeRGBA"
+  },
+  "44": {
+    "inputs": {
+      "filename_prefix": "polar_bear___DIRECTION__",
+      "images": ["43", 0]
+    },
+    "class_type": "SaveImage"
+  }
+}

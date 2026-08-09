@@ -15,6 +15,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 import time
@@ -1276,6 +1277,81 @@ def make_bear_reference_preview_with_ref(ref: Path) -> Path:
     return _make_preview_sheet_from_ref(ref)
 
 
+LAYERDIFFUSE_WORKFLOW = ROOT / ".comfyui-workflows" / "polar_bear_flat_layerdiffuse.json"
+
+LAYERDIFFUSE_DIRECTIONS: dict[str, dict[str, Any]] = {
+    "down": {
+        "view": "front view facing camera, walking toward viewer",
+        "positive_node": "10",
+        "sampler_node": "11",
+        "save_node": "14",
+        "seed_offset": 0,
+    },
+    "left": {
+        "view": "side view facing left, walking to the left, profile view",
+        "positive_node": "20",
+        "sampler_node": "21",
+        "save_node": "24",
+        "seed_offset": 1,
+    },
+    "right": {
+        "view": "side view facing right, walking to the right, profile view",
+        "positive_node": "30",
+        "sampler_node": "31",
+        "save_node": "34",
+        "seed_offset": 2,
+    },
+    "up": {
+        "view": "back view, facing away from camera, walking away",
+        "positive_node": "40",
+        "sampler_node": "41",
+        "save_node": "44",
+        "seed_offset": 3,
+    },
+}
+
+
+def make_bear_layerdiffuse(server: str, seed: int = 1337) -> Path:
+    """Generate four transparent flat-vector polar bear frames via LayerDiffuse.
+
+    Loads the .comfyui-workflows/polar_bear_flat_layerdiffuse.json workflow,
+    substitutes per-direction view prompts, queues it once, downloads the
+    transparent PNGs, and assembles the 4x4 spritesheet. The frames are already
+    RGBA, so the sheet builder only centers/scales them and applies a hard
+    alpha cut; no white-fringe post-processing is run.
+    """
+    workflow = json.loads(LAYERDIFFUSE_WORKFLOW.read_text())
+
+    for direction, meta in LAYERDIFFUSE_DIRECTIONS.items():
+        positive_node = workflow[meta["positive_node"]]
+        text = positive_node["inputs"]["text"]
+        text = text.replace("__VIEW__", meta["view"])
+        positive_node["inputs"]["text"] = text
+
+        workflow[meta["sampler_node"]]["inputs"]["seed"] = seed + meta["seed_offset"]
+
+        save_node = workflow[meta["save_node"]]
+        prefix = save_node["inputs"]["filename_prefix"]
+        save_node["inputs"]["filename_prefix"] = prefix.replace("__DIRECTION__", direction)
+
+    prompt_id = submit(server, workflow)
+    print(f"[bear-layerdiffuse] queued {prompt_id}")
+    entry = poll_until_done(server, prompt_id, timeout=600.0)
+
+    directions: dict[str, list[Path]] = {"up": [], "right": [], "down": [], "left": []}
+    for direction, meta in LAYERDIFFUSE_DIRECTIONS.items():
+        node_outputs = entry.get("outputs", {}).get(meta["save_node"], {})
+        images = node_outputs.get("images", [])
+        if not images:
+            raise RuntimeError(f"No output image for direction {direction}")
+        img = images[0]
+        out = PREVIEW / f"characters/polar_bear_{direction}.png"
+        download_image(server, img["filename"], img.get("subfolder", ""), out)
+        directions[direction].append(out)
+
+    return assemble_bear_sheet(directions, rows=4, hard_alpha=True)
+
+
 def _make_preview_sheet_from_ref(ref: Path, rows: int = 8) -> Path:
     """Tile a 512x512 reference into a 4xN preview sheet (default 8, flat mode uses 4)."""
     with Image.open(ref).convert("RGBA") as img:
@@ -1373,6 +1449,7 @@ def main() -> None:
     parser.add_argument("--preview-bear-flat", action="store_true", help="Generate flat vector polar bear reference + 4x4 spritesheet")
     parser.add_argument("--preview-bear-ref", action="store_true", help="Generate front-facing reference preview sheet only")
     parser.add_argument("--preview-bear-3d", action="store_true", help="Generate a textured GLB of the polar bear via Tripo image-to-3D")
+    parser.add_argument("--preview-bear-layerdiffuse", action="store_true", help="Generate flat vector transparent polar bear via ComfyUI LayerDiffuse")
     parser.add_argument("--preview-tiles", action="store_true", help="Generate tile atlas")
     parser.add_argument("--promote", action="store_true", help="Copy previews to active asset folders")
     parser.add_argument("--no-lora", action="store_true", help="Use CartoonXL without the Voxel XL LoRA (not voxel style)")
@@ -1486,6 +1563,13 @@ def main() -> None:
             make_bear_3d(args.server, reference=args.style_ref, timeout=900.0, api_key=tripo_api_key)
         except Exception as exc:
             print(f"[bear-3d] failed: {exc}", file=sys.stderr)
+            sys.exit(1)
+
+    if args.preview_bear_layerdiffuse:
+        try:
+            make_bear_layerdiffuse(args.server, args.seed)
+        except Exception as exc:
+            print(f"[bear-layerdiffuse] failed: {exc}", file=sys.stderr)
             sys.exit(1)
 
     if args.preview_tiles:

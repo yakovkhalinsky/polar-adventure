@@ -64,6 +64,17 @@ MODES = {
         "height": 512,
         "scale_to": 256,
     },
+    "layerdiffuse": {
+        "checkpoint": "v1-5-pruned-emaonly.safetensors",
+        "steps": 25,
+        "cfg": 7.0,
+        "sampler": "dpmpp_2m",
+        "scheduler": "karras",
+        "latent": "EmptyLatentImage",
+        "width": 512,
+        "height": 512,
+        "scale_to": 256,
+    },
 }
 
 
@@ -82,7 +93,7 @@ def prompt_for_tile(name: str) -> str:
     )
 
 
-def prompt_for_bear(direction: str) -> str:
+def prompt_for_bear(direction: str, mode: str = "sd15") -> str:
     """Return a prompt tuned for a consistent polar bear game sprite."""
     views = {
         "north": "back view, facing away from camera",
@@ -90,14 +101,103 @@ def prompt_for_bear(direction: str) -> str:
         "south": "front view, facing toward camera",
         "west": "left side view, facing left",
     }
+    bg = "transparent background, isolated character" if mode == "layerdiffuse" else CHROMA_BG
     return (
         "cute polar bear character, chibi proportions, "
         f"{views[direction]}, "
         "full body visible, standing pose, "
         "white fluffy fur, small black eyes and nose, "
         "game sprite, clean vector-like style, soft shading, "
-        f"{CHROMA_BG}, centered, high quality"
+        f"{bg}, centered, high quality"
     )
+
+
+def _add_sd15_chain(
+    workflow: dict,
+    start_id: int,
+    prompt_text: str,
+    cfg: dict,
+    model_ref: list,
+    latent_ref: list,
+    vae_ref: list,
+    filename_prefix: str,
+    use_layerdiffuse: bool = False,
+) -> int:
+    """Add one sd15/layerdiffuse generation chain and return the next free node id."""
+    encode_id = str(start_id)
+    negative_id = str(start_id + 1)
+    sampler_id = str(start_id + 2)
+    decode_id = str(start_id + 3)
+
+    workflow[encode_id] = {
+        "inputs": {"text": prompt_text, "clip": ["1", 1]},
+        "class_type": "CLIPTextEncode",
+    }
+    workflow[negative_id] = {
+        "inputs": {
+            "text": "blurry, low quality, watermark, signature, text, cropped, worst quality",
+            "clip": ["1", 1],
+        },
+        "class_type": "CLIPTextEncode",
+    }
+    workflow[sampler_id] = {
+        "inputs": {
+            "seed": 0,
+            "steps": cfg["steps"],
+            "cfg": cfg["cfg"],
+            "sampler_name": cfg["sampler"],
+            "scheduler": cfg["scheduler"],
+            "denoise": 1,
+            "model": model_ref,
+            "positive": [encode_id, 0],
+            "negative": [negative_id, 0],
+            "latent_image": latent_ref,
+        },
+        "class_type": "KSampler",
+    }
+    workflow[decode_id] = {
+        "inputs": {"samples": [sampler_id, 0], "vae": vae_ref},
+        "class_type": "VAEDecode",
+    }
+
+    image_ref = [decode_id, 0]
+    next_id = start_id + 4
+
+    if use_layerdiffuse:
+        rgba_id = str(start_id + 4)
+        workflow[rgba_id] = {
+            "inputs": {
+                "samples": [sampler_id, 0],
+                "images": [decode_id, 0],
+                "sd_version": "SD15",
+                "sub_batch_size": 16,
+            },
+            "class_type": "LayeredDiffusionDecodeRGBA",
+        }
+        image_ref = [rgba_id, 0]
+        next_id = start_id + 5
+
+    scale_id = str(next_id)
+    save_id = str(next_id + 1)
+    workflow[scale_id] = {
+        "inputs": {
+            "image": image_ref,
+            "upscale_method": "lanczos",
+            "width": cfg["scale_to"],
+            "height": cfg["scale_to"],
+            "crop": "center",
+        },
+        "class_type": "ImageScale",
+    }
+    workflow[save_id] = {
+        "inputs": {
+            "filename_prefix": filename_prefix,
+            "images": [scale_id, 0],
+        },
+        "class_type": "SaveImage",
+    }
+
+    return next_id + 2
 
 
 def build_workflow(mode: str) -> dict:
@@ -136,15 +236,25 @@ def build_workflow(mode: str) -> dict:
             },
             "class_type": cfg["latent"],
         }
-    elif mode == "sd15":
+    elif mode in ("sd15", "layerdiffuse"):
         workflow["1"] = {
             "inputs": {"ckpt_name": cfg["checkpoint"]},
             "class_type": "CheckpointLoaderSimple",
         }
-        workflow["2"] = {
-            "inputs": {"vae_name": cfg["vae"]},
-            "class_type": "VAELoader",
-        }
+        if mode == "sd15":
+            workflow["2"] = {
+                "inputs": {"vae_name": cfg["vae"]},
+                "class_type": "VAELoader",
+            }
+        else:
+            workflow["2"] = {
+                "inputs": {
+                    "model": ["1", 0],
+                    "config": "SD1.x, Attention Injection, attn_sharing",
+                    "weight": 1.0,
+                },
+                "class_type": "LayeredDiffusionApply",
+            }
         workflow["3"] = {
             "inputs": {
                 "width": cfg["width"],
@@ -156,20 +266,20 @@ def build_workflow(mode: str) -> dict:
 
     prompts: dict[str, str] = {}
     for direction in ["north", "east", "south", "west"]:
-        prompts[f"polar_bear_{direction}"] = prompt_for_bear(direction)
+        prompts[f"polar_bear_{direction}"] = prompt_for_bear(direction, mode=mode)
     for tile in ["snow", "ice", "ice_cracks"]:
         prompts[f"tile_{tile}"] = prompt_for_tile(tile)
 
     node_id = 10
     for key, prompt_text in prompts.items():
-        encode_id = str(node_id)
-        negative_id = str(node_id + 1)
-        sampler_id = str(node_id + 2)
-        decode_id = str(node_id + 3)
-        scale_id = str(node_id + 4)
-        save_id = str(node_id + 5)
-
         if mode == "turbo":
+            encode_id = str(node_id)
+            negative_id = str(node_id + 1)
+            sampler_id = str(node_id + 2)
+            decode_id = str(node_id + 3)
+            scale_id = str(node_id + 4)
+            save_id = str(node_id + 5)
+
             workflow[encode_id] = {
                 "inputs": {"text": prompt_text, "clip": ["1", 0]},
                 "class_type": "CLIPTextEncode",
@@ -197,57 +307,51 @@ def build_workflow(mode: str) -> dict:
                 "inputs": {"samples": [sampler_id, 0], "vae": ["2", 0]},
                 "class_type": "VAEDecode",
             }
-        else:  # sd15
-            workflow[encode_id] = {
-                "inputs": {"text": prompt_text, "clip": ["1", 1]},
-                "class_type": "CLIPTextEncode",
-            }
-            workflow[negative_id] = {
+            workflow[scale_id] = {
                 "inputs": {
-                    "text": "blurry, low quality, watermark, signature, text, cropped, worst quality",
-                    "clip": ["1", 1],
+                    "image": [decode_id, 0],
+                    "upscale_method": "lanczos",
+                    "width": cfg["scale_to"],
+                    "height": cfg["scale_to"],
+                    "crop": "center",
                 },
-                "class_type": "CLIPTextEncode",
+                "class_type": "ImageScale",
             }
-            workflow[sampler_id] = {
+            workflow[save_id] = {
                 "inputs": {
-                    "seed": 0,
-                    "steps": cfg["steps"],
-                    "cfg": cfg["cfg"],
-                    "sampler_name": cfg["sampler"],
-                    "scheduler": cfg["scheduler"],
-                    "denoise": 1,
-                    "model": ["1", 0],
-                    "positive": [encode_id, 0],
-                    "negative": [negative_id, 0],
-                    "latent_image": ["3", 0],
+                    "filename_prefix": key,
+                    "images": [scale_id, 0],
                 },
-                "class_type": "KSampler",
+                "class_type": "SaveImage",
             }
-            workflow[decode_id] = {
-                "inputs": {"samples": [sampler_id, 0], "vae": ["2", 0]},
-                "class_type": "VAEDecode",
-            }
-
-        workflow[scale_id] = {
-            "inputs": {
-                "image": [decode_id, 0],
-                "upscale_method": "lanczos",
-                "width": cfg["scale_to"],
-                "height": cfg["scale_to"],
-                "crop": "center",
-            },
-            "class_type": "ImageScale",
-        }
-        workflow[save_id] = {
-            "inputs": {
-                "filename_prefix": key,
-                "images": [scale_id, 0],
-            },
-            "class_type": "SaveImage",
-        }
-
-        node_id += 10
+            node_id += 10
+        elif mode == "sd15":
+            node_id = _add_sd15_chain(
+                workflow,
+                node_id,
+                prompt_text,
+                cfg,
+                model_ref=["1", 0],
+                latent_ref=["3", 0],
+                vae_ref=["2", 0],
+                filename_prefix=key,
+                use_layerdiffuse=False,
+            )
+        else:  # layerdiffuse
+            use_layerdiffuse = key.startswith("polar_bear_")
+            # For layerdiffuse bears we use the checkpoint's built-in VAE. Tiles
+            # also use it so no external VAE loader is needed.
+            node_id = _add_sd15_chain(
+                workflow,
+                node_id,
+                prompt_text,
+                cfg,
+                model_ref=["2", 0],
+                latent_ref=["3", 0],
+                vae_ref=["1", 2],
+                filename_prefix=key,
+                use_layerdiffuse=use_layerdiffuse,
+            )
 
     return workflow
 
@@ -341,7 +445,7 @@ def main():
     )
     parser.add_argument(
         "--mode",
-        choices=["turbo", "sd15"],
+        choices=["turbo", "sd15", "layerdiffuse"],
         default="turbo",
         help="Which model stack to use (default: turbo)",
     )
@@ -361,9 +465,12 @@ def main():
             + server_info.get("clips", [])
             + server_info.get("vaes", [])
         )
-    else:
+    elif args.mode == "sd15":
         required = [cfg["checkpoint"], cfg["vae"]]
         available = server_info.get("checkpoints", []) + server_info.get("vaes", [])
+    else:  # layerdiffuse
+        required = [cfg["checkpoint"]]
+        available = server_info.get("checkpoints", [])
 
     missing = [r for r in required if r not in available]
     if missing:
