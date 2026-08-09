@@ -147,23 +147,78 @@ $nodes = @(
     @{ Repo = "https://github.com/VAST-AI-Research/ComfyUI-Tripo.git"; Name = "ComfyUI-Tripo" }
 )
 
+function Install-NodeRequirements {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$TargetPath,
+        [Parameter(Mandatory = $true)]
+        [string]$NodeName
+    )
+
+    $reqConfig = switch ($NodeName) {
+        "ComfyUI-Tripo"      { "requirements.txt" }
+        "ComfyUI-layerdiffuse" { @("requirements.txt", "install.py") }
+        default              { $null }
+    }
+
+    if (-not $reqConfig) { return }
+
+    $items = if ($reqConfig -is [array]) { $reqConfig } else { @($reqConfig) }
+    foreach ($item in $items) {
+        $reqFile = Join-Path $TargetPath $item
+        if (Test-Path $reqFile) {
+            if ($item -eq "install.py") {
+                Write-Host "  Running install.py for $NodeName..." -ForegroundColor Cyan
+                try {
+                    Push-Location $TargetPath
+                    & python "install.py"
+                    Pop-Location
+                    Write-Host "    install.py completed for $NodeName" -ForegroundColor Green
+                }
+                catch {
+                    Write-Host "    install.py failed for ${NodeName}: $_" -ForegroundColor Red
+                    Write-Host "    You may need to run manually: cd '$TargetPath'; python install.py" -ForegroundColor Yellow
+                }
+            }
+            elseif ($item.EndsWith(".txt")) {
+                Write-Host "  Installing Python requirements for $NodeName..." -ForegroundColor Cyan
+                try {
+                    & python -m pip install -r $reqFile
+                    Write-Host "    Requirements installed for $NodeName" -ForegroundColor Green
+                }
+                catch {
+                    Write-Host "    Could not install requirements for ${NodeName}: $_" -ForegroundColor Red
+                    Write-Host "    You may need to run: python -m pip install -r '$reqFile'" -ForegroundColor Yellow
+                }
+            }
+        }
+    }
+}
+
 if (-not $SkipNodes) {
     Write-Host "`nInstalling custom nodes..." -ForegroundColor Yellow
     foreach ($node in $nodes) {
         $target = Join-Path $customNodesDir $node.Name
+        $wasInstalled = $false
         if (Test-Path $target) {
             Write-Host "  Already installed: $($node.Name)" -ForegroundColor Green
+            $wasInstalled = $true
         }
         else {
             Write-Host "  Installing $($node.Name)..." -ForegroundColor Cyan
             try {
                 git clone $node.Repo $target
                 Write-Host "    Installed: $($node.Name)" -ForegroundColor Green
+                $wasInstalled = $true
             }
             catch {
                 Write-Host "    FAILED: $_" -ForegroundColor Red
                 Write-Host "    Make sure git is on your PATH." -ForegroundColor Red
             }
+        }
+
+        if ($wasInstalled) {
+            Install-NodeRequirements -TargetPath $target -NodeName $node.Name
         }
     }
 
