@@ -131,16 +131,9 @@
     <section>
       <h2>Assembled Spritesheet</h2>
       <div class="sheet-stage">
-        <canvas id="stage" width="512" height="1024"></canvas>
-        <div class="controls">
-          <button data-row="0" class="active">Row 0: walk-up</button>
-          <button data-row="1">Row 1: walk-right</button>
-          <button data-row="2">Row 2: walk-down</button>
-          <button data-row="3">Row 3: walk-left</button>
-          <button data-row="4">Row 4: swim</button>
-          <button data-row="5">Row 5: attack</button>
-          <button data-row="6">Row 6: push</button>
-          <button data-row="7">Row 7: idle-breathe</button>
+        <canvas id="stage" width="512" height="512"></canvas>
+        <div class="controls" id="controls">
+          <!-- Buttons are generated based on detected sheet rows. -->
         </div>
       </div>
       <p class="note">Click row buttons to preview animation. Red/white checkerboard shows transparency.</p>
@@ -181,13 +174,17 @@
     // Spritesheet preview stage
     const canvas = document.getElementById('stage');
     const ctx = canvas.getContext('2d');
+    const controls = document.getElementById('controls');
     const img = new Image();
     img.src = paths.sheet + cacheBust;
     let currentRow = 0;
     let frame = 0;
     const cols = 4;
-    const rows = 8;
     const cell = 128;
+    const rowLabels = {
+      4: ['walk-up', 'walk-right', 'walk-down', 'walk-left'],
+      8: ['walk-up', 'walk-right', 'walk-down', 'walk-left', 'swim', 'attack', 'push', 'idle-breathe'],
+    };
 
     function draw() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -197,7 +194,29 @@
       ctx.drawImage(img, sx, sy, cell, cell, 0, 0, cell * 4, cell * 4);
     }
 
+    function buildControls(rows) {
+      const labels = rowLabels[rows] || Array.from({length: rows}, (_, i) => `Row ${i}`);
+      controls.innerHTML = '';
+      labels.forEach((label, idx) => {
+        const btn = document.createElement('button');
+        btn.dataset.row = idx;
+        btn.textContent = `Row ${idx}: ${label}`;
+        if (idx === 0) btn.classList.add('active');
+        btn.addEventListener('click', () => {
+          controls.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          currentRow = idx;
+          frame = 0;
+          draw();
+        });
+        controls.appendChild(btn);
+      });
+    }
+
     img.onload = () => {
+      const rows = Math.round(img.height / cell);
+      canvas.height = rows * cell;
+      buildControls(rows);
       draw();
       setInterval(() => {
         frame = (frame + 1) % cols;
@@ -211,16 +230,6 @@
       ctx.textAlign = 'center';
       ctx.fillText('Spritesheet not assembled yet', canvas.width / 2, canvas.height / 2);
     };
-
-    document.querySelectorAll('.controls button').forEach(btn => {
-      btn.addEventListener('click', () => {
-        document.querySelectorAll('.controls button').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        currentRow = parseInt(btn.dataset.row, 10);
-        frame = 0;
-        draw();
-      });
-    });
   </script>
 </body>
 </html>

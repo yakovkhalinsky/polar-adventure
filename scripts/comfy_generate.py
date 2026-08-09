@@ -908,7 +908,7 @@ def make_bear_reference(server: str | None, seed: int, size: int = 512,
         prompt = (
             "flat vector game character, polar bear anthropomorphic adult male, clean thick dark outline, "
             "simple geometric shapes, minimal shading, solid flat colors, "
-            "wearing a solid grey hoodie with drawstrings and plain blue denim jeans with no rips, "
+            "wearing a solid grey hoodie with drawstrings and plain blue denim jeans with no rips, no tears, no holes, intact denim, "
             "white fur, black and white high-top sneakers like Converse Chuck Taylors, bare hands with visible claws, no gloves, no headband, "
             f"{direction_prompts[direction]}, "
             "isometric game asset, pure white background, isolated character, centered, "
@@ -920,7 +920,7 @@ def make_bear_reference(server: str | None, seed: int, size: int = 512,
             "belly, overweight, chubby, gloves, mittens, wrist cuffs, "
             "barefoot, bare paws, no shoes, sandals, boots, high heels, "
             "white hoodie, black hoodie, blue hoodie, pink hoodie, red hoodie, "
-            "ripped jeans, torn jeans, distressed jeans, shorts, skirt, bare chest, "
+            "ripped jeans, torn jeans, distressed jeans, holes in jeans, frayed jeans, shorts, skirt, bare chest, "
             "3d rendered, realistic, photograph, smooth shading, detailed fabric, texture, soft shadows, "
             "grey background, gradient background, textured background"
         )
