@@ -59,13 +59,13 @@ export class PolarBear {
         { name: 'walk-right', row: 1, frames: 4, fps: 8, loop: true },
         { name: 'walk-down', row: 2, frames: 4, fps: 8, loop: true },
         { name: 'walk-left', row: 3, frames: 4, fps: 8, loop: true },
-        { name: 'swim', row: 4, frames: 4, fps: 6, loop: true },
-        { name: 'attack', row: 5, frames: 4, fps: 10, loop: false },
-        { name: 'push', row: 6, frames: 4, fps: 8, loop: true },
-        { name: 'idle-breathe', row: 7, frames: 4, fps: 4, loop: true, direction: 'pingpong' },
+        { name: 'swim', row: 2, frames: 4, fps: 6, loop: true },
+        { name: 'attack', row: 2, frames: 4, fps: 10, loop: false },
+        { name: 'push', row: 2, frames: 4, fps: 8, loop: true },
+        { name: 'idle-breathe', row: 2, frames: 4, fps: 4, loop: true, direction: 'pingpong' },
       ],
       4,
-      8
+      4
     );
 
     this.animation.play('idle-breathe');

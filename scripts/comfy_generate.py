@@ -9,6 +9,7 @@ individual direction frames.
 Usage:
     python3 scripts/comfy_generate.py --server http://note:8188 --preview-all
     python3 scripts/comfy_generate.py --server http://note:8188 --preview-bear-3d
+    python3 scripts/comfy_generate.py --server http://note:8188 --preview-bear-flat
     python3 scripts/comfy_generate.py --server http://note:8188 --promote
 """
 from __future__ import annotations
@@ -886,13 +887,15 @@ def make_bear_reference(server: str | None, seed: int, size: int = 512,
                         style_ref: Path | None = None,
                         use_sd15: bool = False,
                         bfl_api_key: str | None = None,
-                        bfl_model: str = "flux-pro-1.1") -> Path:
+                        bfl_model: str = "flux-pro-1.1",
+                        flat_style: bool = False) -> Path:
     """Generate a single consistent adult polar bear reference on white for a given direction.
 
     If bfl_api_key is provided, the Black Forest Labs FLUX API is used instead of ComfyUI.
     If style_ref is provided, it is uploaded to ComfyUI and used as the img2img init image so the
     generated frame inherits the reference's colors, outfit, proportions, and style.
     If use_sd15 is True, the SD 1.5 checkpoint is used instead of CartoonXL SDXL.
+    If flat_style is True, the prompt asks for a flat vector isometric sprite style.
     """
     direction_prompts = {
         "up": "seen from behind, back view, walking away from camera, facing away",
@@ -900,25 +903,47 @@ def make_bear_reference(server: str | None, seed: int, size: int = 512,
         "down": "front view facing camera, walking toward viewer",
         "left": "side view facing left, walking to the left, profile view",
     }
-    prompt = (
-        "anthropomorphic adult male polar bear character, smooth 3D rendered style, soft realistic shading, "
-        "detailed fabric texture, muscular humanoid build, broad muscular shoulders, thick arms, strong stocky body, "
-        "wearing a solid grey hoodie with drawstrings and plain blue denim jeans with no rips, "
-        "white fur, black and white high-top sneakers like Converse Chuck Taylors, bare hands with visible claws, no gloves, no headband, "
-        f"{direction_prompts[direction]}, "
-        "pure white background, isolated character, centered, "
-        "no text, no watermark, no border"
-    )
-    negative = (
-        f"{NEGATIVE_SPRITE}, {NEGATIVE_OBJECT}, baby, cub, child, toddler, chibi, kawaii, "
-        "cute, big eyes, large eyes, round face, big head, short legs, stubby legs, "
-        "belly, overweight, chubby, gloves, mittens, wrist cuffs, "
-        "barefoot, bare paws, no shoes, sandals, boots, high heels, "
-        "white hoodie, black hoodie, blue hoodie, pink hoodie, red hoodie, "
-        "ripped jeans, torn jeans, distressed jeans, shorts, skirt, bare chest, "
-        "cartoon, anime, mascot, plushie, toy, figurine, Funko, collectable, "
-        "flat shading, 2d illustration, grey background, gradient background, textured background, photograph"
-    )
+
+    if flat_style:
+        prompt = (
+            "flat vector game character, polar bear anthropomorphic adult male, clean thick dark outline, "
+            "simple geometric shapes, minimal shading, solid flat colors, "
+            "wearing a solid grey hoodie with drawstrings and plain blue denim jeans with no rips, "
+            "white fur, black and white high-top sneakers like Converse Chuck Taylors, bare hands with visible claws, no gloves, no headband, "
+            f"{direction_prompts[direction]}, "
+            "isometric game asset, pure white background, isolated character, centered, "
+            "no text, no watermark, no border, no shadows, no gradients"
+        )
+        negative = (
+            f"{NEGATIVE_SPRITE}, {NEGATIVE_OBJECT}, baby, cub, child, toddler, chibi, kawaii, "
+            "cute, big eyes, large eyes, round face, big head, short legs, stubby legs, "
+            "belly, overweight, chubby, gloves, mittens, wrist cuffs, "
+            "barefoot, bare paws, no shoes, sandals, boots, high heels, "
+            "white hoodie, black hoodie, blue hoodie, pink hoodie, red hoodie, "
+            "ripped jeans, torn jeans, distressed jeans, shorts, skirt, bare chest, "
+            "3d rendered, realistic, photograph, smooth shading, detailed fabric, texture, soft shadows, "
+            "grey background, gradient background, textured background"
+        )
+    else:
+        prompt = (
+            "anthropomorphic adult male polar bear character, smooth 3D rendered style, soft realistic shading, "
+            "detailed fabric texture, muscular humanoid build, broad muscular shoulders, thick arms, strong stocky body, "
+            "wearing a solid grey hoodie with drawstrings and plain blue denim jeans with no rips, "
+            "white fur, black and white high-top sneakers like Converse Chuck Taylors, bare hands with visible claws, no gloves, no headband, "
+            f"{direction_prompts[direction]}, "
+            "pure white background, isolated character, centered, "
+            "no text, no watermark, no border"
+        )
+        negative = (
+            f"{NEGATIVE_SPRITE}, {NEGATIVE_OBJECT}, baby, cub, child, toddler, chibi, kawaii, "
+            "cute, big eyes, large eyes, round face, big head, short legs, stubby legs, "
+            "belly, overweight, chubby, gloves, mittens, wrist cuffs, "
+            "barefoot, bare paws, no shoes, sandals, boots, high heels, "
+            "white hoodie, black hoodie, blue hoodie, pink hoodie, red hoodie, "
+            "ripped jeans, torn jeans, distressed jeans, shorts, skirt, bare chest, "
+            "cartoon, anime, mascot, plushie, toy, figurine, Funko, collectable, "
+            "flat shading, 2d illustration, grey background, gradient background, textured background, photograph"
+        )
     out = PREVIEW / f"characters/bear-reference-{direction}.png"
 
     if bfl_api_key:
@@ -962,7 +987,7 @@ def make_bear_reference(server: str | None, seed: int, size: int = 512,
 
 
 def make_bear_direction(server: str, direction: str, reference: Path, seed: int,
-                        pose: str = "", use_sd15: bool = False) -> Path:
+                        pose: str = "", use_sd15: bool = False, flat_style: bool = False) -> Path:
     """Generate one direction frame using img2img from the reference for consistency."""
     directions = {
         "up": "seen from behind, walking away, back view, facing away, upright humanoid posture",
@@ -970,25 +995,47 @@ def make_bear_direction(server: str, direction: str, reference: Path, seed: int,
         "left": "side view walking to the left, facing left, upright humanoid posture",
         "down": "front view walking toward viewer, facing camera, upright humanoid posture",
     }
-    prompt = (
-        "anthropomorphic adult male polar bear character, same smooth 3D design and outfit as reference, "
-        "soft realistic shading, detailed fabric texture, muscular humanoid build, broad muscular shoulders, thick arms, strong stocky body, "
-        "wearing a solid grey hoodie with drawstrings and plain blue denim jeans with no rips, "
-        "white fur, black and white high-top sneakers like Converse Chuck Taylors, bare hands with visible claws, no gloves, no headband, "
-        f"{directions[direction]}, {pose}, "
-        "pure white background, isolated character, centered, "
-        "no text, no watermark, no border"
-    )
-    negative = (
-        f"{NEGATIVE_SPRITE}, {NEGATIVE_OBJECT}, baby, cub, child, toddler, chibi, kawaii, "
-        "cute, big eyes, large eyes, round face, big head, short legs, stubby legs, "
-        "belly, overweight, chubby, gloves, mittens, wrist cuffs, "
-        "barefoot, bare paws, no shoes, sandals, boots, high heels, "
-        "white hoodie, black hoodie, blue hoodie, pink hoodie, red hoodie, "
-        "ripped jeans, torn jeans, distressed jeans, shorts, skirt, bare chest, "
-        "cartoon, anime, mascot, plushie, toy, figurine, Funko, collectable, "
-        "flat shading, 2d illustration, grey background, gradient background, textured background, photograph"
-    )
+
+    if flat_style:
+        prompt = (
+            "flat vector game character, same polar bear anthropomorphic design and outfit as reference, "
+            "clean thick dark outline, simple geometric shapes, minimal shading, solid flat colors, "
+            "wearing a solid grey hoodie with drawstrings and plain blue denim jeans with no rips, "
+            "white fur, black and white high-top sneakers like Converse Chuck Taylors, bare hands with visible claws, no gloves, no headband, "
+            f"{directions[direction]}, {pose}, "
+            "isometric game asset, pure white background, isolated character, centered, "
+            "no text, no watermark, no border, no shadows, no gradients"
+        )
+        negative = (
+            f"{NEGATIVE_SPRITE}, {NEGATIVE_OBJECT}, baby, cub, child, toddler, chibi, kawaii, "
+            "cute, big eyes, large eyes, round face, big head, short legs, stubby legs, "
+            "belly, overweight, chubby, gloves, mittens, wrist cuffs, "
+            "barefoot, bare paws, no shoes, sandals, boots, high heels, "
+            "white hoodie, black hoodie, blue hoodie, pink hoodie, red hoodie, "
+            "ripped jeans, torn jeans, distressed jeans, shorts, skirt, bare chest, "
+            "3d rendered, realistic, photograph, smooth shading, detailed fabric, texture, soft shadows, "
+            "grey background, gradient background, textured background"
+        )
+    else:
+        prompt = (
+            "anthropomorphic adult male polar bear character, same smooth 3D design and outfit as reference, "
+            "soft realistic shading, detailed fabric texture, muscular humanoid build, broad muscular shoulders, thick arms, strong stocky body, "
+            "wearing a solid grey hoodie with drawstrings and plain blue denim jeans with no rips, "
+            "white fur, black and white high-top sneakers like Converse Chuck Taylors, bare hands with visible claws, no gloves, no headband, "
+            f"{directions[direction]}, {pose}, "
+            "pure white background, isolated character, centered, "
+            "no text, no watermark, no border"
+        )
+        negative = (
+            f"{NEGATIVE_SPRITE}, {NEGATIVE_OBJECT}, baby, cub, child, toddler, chibi, kawaii, "
+            "cute, big eyes, large eyes, round face, big head, short legs, stubby legs, "
+            "belly, overweight, chubby, gloves, mittens, wrist cuffs, "
+            "barefoot, bare paws, no shoes, sandals, boots, high heels, "
+            "white hoodie, black hoodie, blue hoodie, pink hoodie, red hoodie, "
+            "ripped jeans, torn jeans, distressed jeans, shorts, skirt, bare chest, "
+            "cartoon, anime, mascot, plushie, toy, figurine, Funko, collectable, "
+            "flat shading, 2d illustration, grey background, gradient background, textured background, photograph"
+        )
     out = PREVIEW / f"characters/bear-{direction}-{seed}.png"
 
     uploaded_name = upload_image(server, reference)
@@ -1016,14 +1063,17 @@ def make_bear_direction(server: str, direction: str, reference: Path, seed: int,
     return out
 
 
-def assemble_bear_sheet(directions: dict[str, list[Path]]) -> Path:
-    """Assemble 4 directions x 8 rows into a 512x1024 spritesheet.
+def assemble_bear_sheet(directions: dict[str, list[Path]], rows: int = 8) -> Path:
+    """Assemble a polar bear spritesheet.
 
-    Rows: walk-up, walk-right, walk-down, walk-left, swim, attack, push, idle.
-    Each direction can supply 1 or more frames; frames repeat to fill 4 cols.
+    By default (rows=8) produces the full 4 directions x 8 rows sheet used by the
+    realistic 3D pipeline. When rows=4 and directions contains one frame per
+    direction, produces a compact 4x4 flat-vector sheet: walk-up, walk-right,
+    walk-down, walk-left.
     """
     cell = 128
-    sheet = Image.new("RGBA", (cell * 4, cell * 8), (255, 255, 255, 0))
+    cols = 4
+    sheet = Image.new("RGBA", (cell * cols, cell * rows), (255, 255, 255, 0))
 
     order = ["up", "right", "down", "left"]
     frames: dict[str, list[Image.Image]] = {}
@@ -1041,13 +1091,20 @@ def assemble_bear_sheet(directions: dict[str, list[Path]]) -> Path:
             frame.paste(img, (x, y), img)
             frames[d].append(frame)
 
-    # Row mapping for walk directions.
-    row_dirs = ["up", "right", "down", "left", "down", "down", "down", "down"]
-    for row, d in enumerate(row_dirs):
-        direction_frames = frames[d]
-        for col in range(4):
-            frame = direction_frames[col % len(direction_frames)]
-            sheet.paste(frame, (col * cell, row * cell), frame)
+    if rows == 4:
+        # Compact flat-vector sheet: one row per direction, 4 identical frames.
+        for row, d in enumerate(order):
+            frame = frames[d][0]
+            for col in range(cols):
+                sheet.paste(frame, (col * cell, row * cell), frame)
+    else:
+        # Row mapping for walk directions.
+        row_dirs = ["up", "right", "down", "left", "down", "down", "down", "down"]
+        for row, d in enumerate(row_dirs):
+            direction_frames = frames[d]
+            for col in range(cols):
+                frame = direction_frames[col % len(direction_frames)]
+                sheet.paste(frame, (col * cell, row * cell), frame)
 
     out = PREVIEW / "characters/polar-bear.png"
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -1058,10 +1115,12 @@ def assemble_bear_sheet(directions: dict[str, list[Path]]) -> Path:
 
 def make_bear_reference_preview(server: str, seed: int,
                                 style_ref: Path | None = None,
-                                use_sd15: bool = False) -> Path:
+                                use_sd15: bool = False,
+                                flat_style: bool = False) -> Path:
     """Generate a front-facing reference and build a preview sheet that repeats it."""
-    ref = make_bear_reference(server, seed, direction="down", style_ref=style_ref, use_sd15=use_sd15)
-    return _make_preview_sheet_from_ref(ref)
+    ref = make_bear_reference(server, seed, direction="down", style_ref=style_ref,
+                              use_sd15=use_sd15, flat_style=flat_style)
+    return _make_preview_sheet_from_ref(ref, rows=4 if flat_style else 8)
 
 
 def make_bear_reference_preview_with_ref(ref: Path) -> Path:
@@ -1069,8 +1128,8 @@ def make_bear_reference_preview_with_ref(ref: Path) -> Path:
     return _make_preview_sheet_from_ref(ref)
 
 
-def _make_preview_sheet_from_ref(ref: Path) -> Path:
-    """Tile a 512x512 reference into a 4x8 preview sheet."""
+def _make_preview_sheet_from_ref(ref: Path, rows: int = 8) -> Path:
+    """Tile a 512x512 reference into a 4xN preview sheet (default 8, flat mode uses 4)."""
     with Image.open(ref).convert("RGBA") as img:
         cell = 128
         scale = cell / max(img.size)
@@ -1081,8 +1140,8 @@ def _make_preview_sheet_from_ref(ref: Path) -> Path:
         y = (cell - img.height) // 2
         frame.paste(img, (x, y), img)
 
-    sheet = Image.new("RGBA", (cell * 4, cell * 8), (255, 255, 255, 0))
-    for row in range(8):
+    sheet = Image.new("RGBA", (cell * 4, cell * rows), (255, 255, 255, 0))
+    for row in range(rows):
         for col in range(4):
             sheet.paste(frame, (col * cell, row * cell), frame)
 
@@ -1163,6 +1222,7 @@ def main() -> None:
     parser.add_argument("--preview", choices=list(ASSETS.keys()), help="Generate one preview asset")
     parser.add_argument("--preview-all", action="store_true", help="Generate all single preview assets")
     parser.add_argument("--preview-bear", action="store_true", help="Generate polar bear reference + directions + sheet")
+    parser.add_argument("--preview-bear-flat", action="store_true", help="Generate flat vector polar bear reference + 4x4 spritesheet")
     parser.add_argument("--preview-bear-ref", action="store_true", help="Generate front-facing reference preview sheet only")
     parser.add_argument("--preview-bear-3d", action="store_true", help="Generate a textured GLB of the polar bear via Tripo image-to-3D")
     parser.add_argument("--preview-tiles", action="store_true", help="Generate tile atlas")
@@ -1207,7 +1267,8 @@ def main() -> None:
                 print(f"[{key}] failed: {exc}", file=sys.stderr)
                 sys.exit(1)
 
-    if args.preview_bear:
+    if args.preview_bear or args.preview_bear_flat:
+        flat_style = args.preview_bear_flat
         if args.bfl and not bfl_api_key:
             print("ERROR: --bfl requires --bfl-api-key or BFL_API_KEY env var", file=sys.stderr)
             sys.exit(1)
@@ -1221,28 +1282,36 @@ def main() -> None:
                     server, args.seed, direction=d,
                     style_ref=args.style_ref, use_sd15=args.sd15,
                     bfl_api_key=bfl_api_key, bfl_model=args.bfl_model,
+                    flat_style=flat_style,
                 )
 
             directions: dict[str, list[Path]] = {}
-            for d in ["up", "right", "down", "left"]:
-                # Two alternating walk poses per direction, guided by the matching direction reference.
-                pose_a = make_bear_direction(
-                    args.server, d, refs[d], args.seed + hash(d) % 100000,
-                    pose="left leg forward, right leg back, left arm back, right arm forward",
-                    use_sd15=args.sd15,
-                )
-                pose_b = make_bear_direction(
-                    args.server, d, refs[d], args.seed + hash(d) % 100000 + 50000,
-                    pose="right leg forward, left leg back, right arm back, left arm forward",
-                    use_sd15=args.sd15,
-                )
-                directions[d] = [pose_a, pose_b]
-            assemble_bear_sheet(directions)
+            if flat_style:
+                # Flat vector style: one static pose per direction, reuse for all 4 frames.
+                for d in ["up", "right", "down", "left"]:
+                    directions[d] = [refs[d]]
+                assemble_bear_sheet(directions, rows=4)
+            else:
+                # Realistic 3D style: two alternating walk poses per direction.
+                for d in ["up", "right", "down", "left"]:
+                    pose_a = make_bear_direction(
+                        args.server, d, refs[d], args.seed + hash(d) % 100000,
+                        pose="left leg forward, right leg back, left arm back, right arm forward",
+                        use_sd15=args.sd15,
+                    )
+                    pose_b = make_bear_direction(
+                        args.server, d, refs[d], args.seed + hash(d) % 100000 + 50000,
+                        pose="right leg forward, left leg back, right arm back, left arm forward",
+                        use_sd15=args.sd15,
+                    )
+                    directions[d] = [pose_a, pose_b]
+                assemble_bear_sheet(directions, rows=8)
         except Exception as exc:
             print(f"[polar-bear] failed: {exc}", file=sys.stderr)
             sys.exit(1)
 
     if args.preview_bear_ref:
+        flat_style = args.preview_bear_flat
         if args.bfl and not bfl_api_key:
             print("ERROR: --bfl requires --bfl-api-key or BFL_API_KEY env var", file=sys.stderr)
             sys.exit(1)
@@ -1252,8 +1321,9 @@ def main() -> None:
                 server, args.seed, direction="down",
                 style_ref=args.style_ref, use_sd15=args.sd15,
                 bfl_api_key=bfl_api_key, bfl_model=args.bfl_model,
+                flat_style=flat_style,
             )
-            make_bear_reference_preview_with_ref(ref)
+            make_bear_reference_preview_with_ref(ref, rows=4 if flat_style else 8)
         except Exception as exc:
             print(f"[bear-reference-preview] failed: {exc}", file=sys.stderr)
             sys.exit(1)
