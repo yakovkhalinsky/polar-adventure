@@ -370,7 +370,7 @@ def tripo_bear_3d_workflow(image_name: str, api_key: str | None = None) -> dict[
                 "prompt": "",
                 "negative_prompt": "",
                 "image": ["1", 0],
-                "model_version": "v3.1-20260211",
+                "model_version": "v3.0-20250812",
                 "texture": True,
                 "pbr": False,
                 "image_seed": 42,
