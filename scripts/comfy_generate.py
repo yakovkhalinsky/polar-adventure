@@ -523,6 +523,42 @@ def bfl_download_image(result: dict[str, Any], dest: Path) -> None:
     print(f"  downloaded {dest}")
 
 
+def _remove_white_fringe(arr: np.ndarray) -> np.ndarray:
+    """After masking, decontaminate anti-aliased white edges.
+
+    BFL/FLUX renders anti-aliased edges against white, leaving a light grey
+    fringe when the white background is removed. This pass removes obvious
+    white halo pixels and tries to recover the underlying color for soft edges.
+    """
+    height, width, _ = arr.shape
+    rgb = arr[:, :, :3]
+    alpha = arr[:, :, 3]
+
+    max_rgb = rgb.max(axis=2)
+    min_rgb = rgb.min(axis=2)
+    saturation = np.where(max_rgb > 0, (max_rgb - min_rgb) / max_rgb, 0)
+
+    # Pixels that are light and desaturated are likely white-fringe contamination.
+    fringe = (
+        (alpha > 0)
+        & (max_rgb > 230)
+        & (saturation < 0.25)
+    )
+
+    # Estimate true alpha: 0 = white background, 1 = solid color.
+    # For a grey fringe pixel, (255 - max_rgb)/255 approximates the colored
+    # contribution. We keep pixels that have meaningful color, drop near-white.
+    estimated_alpha = np.clip((255 - max_rgb) / 25.0, 0, 1)
+
+    # Drop anything still too close to pure white.
+    estimated_alpha[fringe & (max_rgb > 248)] = 0
+
+    # Apply the refined alpha, but do not increase opacity.
+    new_alpha = alpha * estimated_alpha / 255.0
+    arr[:, :, 3] = np.clip(np.minimum(alpha, new_alpha * 255), 0, 255)
+    return arr
+
+
 def _isolate_white_bg_sprite(img: Image.Image) -> Image.Image:
     """Remove a near-pure white background using connected components + morphology.
 
@@ -609,6 +645,7 @@ def _isolate_white_bg_sprite(img: Image.Image) -> Image.Image:
     keep = np.array(mask_img) > 128
 
     arr[~keep, 3] = 0
+    arr = _remove_white_fringe(arr)
     return Image.fromarray(arr.astype(np.uint8))
 
 
