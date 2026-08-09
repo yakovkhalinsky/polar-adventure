@@ -4,7 +4,7 @@ A polar / arctic / ice-themed isometric adventure game. You play as a polar bear
 
 ## Tech stack
 
-- [Phaser 3](https://phaser.io/) — 2D/2.5D game framework
+- [melonJS](https://melonjs.org/) — 2D/2.5D game framework with native isometric Tiled map support
 - [TypeScript](https://www.typescriptlang.org/) — typed JavaScript
 - [Vite](https://vitejs.dev/) — fast build tool and dev server
 
@@ -12,7 +12,7 @@ A polar / arctic / ice-themed isometric adventure game. You play as a polar bear
 
 ### Prerequisites
 
-- Node.js >= 20
+- Node.js >= 22
 - npm (bundled with Node.js)
 
 ### Install dependencies
@@ -76,16 +76,16 @@ To enable Pages deployment:
 ├── .github/workflows/      # CI/CD workflows
 │   └── deploy.yml          # GitHub Pages deploy workflow
 └── src/
-    ├── main.ts             # Phaser game bootstrap
-    ├── scenes/
-    │   └── GameScene.ts    # Initial isometric ice scene
+    ├── main.ts             # melonJS application bootstrap
+    ├── screens/
+    │   └── PlayScreen.ts   # Initial isometric ice screen
     └── entities/
-        └── Player.ts       # Polar bear player class
+        └── PolarBearEntity.ts  # Polar bear player entity
 ```
 
 ## Notes on the framework choice
 
-Phaser 3 was selected because it is purpose-built for browser-based 2D/2.5D games, has first-class TypeScript support, and produces a plain static bundle that GitHub Pages can serve without extra headers or server configuration. Its built-in camera, input, physics, scene manager, and asset pipeline make it a strong fit for an adventure game with movement, dialogue, inventory, and quests.
+melonJS was selected because it is purpose-built for browser-based 2D/2.5D games, has first-class isometric Tiled map support, first-class TypeScript support, and produces a plain static bundle that GitHub Pages can serve without extra headers or server configuration. Its built-in animation system, camera, input, physics, scene manager, and asset pipeline make it a strong fit for an adventure game with movement, dialogue, inventory, and quests.
 
 ## License
 
