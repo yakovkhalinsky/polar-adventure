@@ -10,9 +10,13 @@ const WALK_SPEED = 160;
 const JUMP_VELOCITY = -260;
 const GRAVITY_Y = 800;
 
+const FRAME_SIZE = 128;
+const SPRITE_SCALE = FRAME_SIZE * 1.25; // 160 world units.
+
 /**
- * Player-controlled polar bear with 4-direction walk animation, idle pose,
- * jump arc, and a dynamic ground shadow. Respects tile and object collision.
+ * Player-controlled polar bear with an extended animation set:
+ * 4-direction walk, swim, attack, push, and idle-breathe.
+ * Respects tile and object collision.
  */
 export class PolarBear {
   readonly character: IsometricSprite;
@@ -21,6 +25,10 @@ export class PolarBear {
 
   private facing: Direction = 'down';
   private isJumping = false;
+  private isPushing = false;
+  private pushTimer = 0;
+  private isAttacking = false;
+  private attackTimer = 0;
   private jumpTime = 0;
   private groundY = 0;
   private pos = new THREE.Vector3();
@@ -36,27 +44,27 @@ export class PolarBear {
       alphaTest: 0.5,
     });
 
-    this.character = new IsometricSprite(material, 80, 80);
+    this.character = new IsometricSprite(material, SPRITE_SCALE, SPRITE_SCALE);
     this.character.sortMode = 'y';
     this.character.setPosition(0, 0, 0.5);
 
     this.animation = new SpriteAnimation(
       texture,
       [
-        { name: 'idle-up', row: 0, frames: 1, fps: 1, loop: true },
-        { name: 'idle-right', row: 1, frames: 1, fps: 1, loop: true },
-        { name: 'idle-down', row: 2, frames: 1, fps: 1, loop: true },
-        { name: 'idle-left', row: 3, frames: 1, fps: 1, loop: true },
         { name: 'walk-up', row: 0, frames: 4, fps: 8, loop: true },
         { name: 'walk-right', row: 1, frames: 4, fps: 8, loop: true },
         { name: 'walk-down', row: 2, frames: 4, fps: 8, loop: true },
         { name: 'walk-left', row: 3, frames: 4, fps: 8, loop: true },
+        { name: 'swim', row: 4, frames: 4, fps: 6, loop: true },
+        { name: 'attack', row: 5, frames: 4, fps: 10, loop: false },
+        { name: 'push', row: 6, frames: 4, fps: 8, loop: true },
+        { name: 'idle-breathe', row: 7, frames: 4, fps: 4, loop: true },
       ],
       4,
-      4
+      8
     );
 
-    this.animation.play('idle-down');
+    this.animation.play('idle-breathe');
 
     // Ground shadow using a tiny generated texture.
     const shadowTexture = this.createShadowTexture();
@@ -66,7 +74,7 @@ export class PolarBear {
       opacity: 0.35,
       depthWrite: false,
     });
-    this.shadow = new IsometricSprite(shadowMaterial, 36, 14);
+    this.shadow = new IsometricSprite(shadowMaterial, 72, 28);
     this.shadow.setPosition(0, 0, 0.1);
     this.shadow.sortMode = 'y';
   }
@@ -117,8 +125,27 @@ export class PolarBear {
       this.startJump();
     }
 
+    if (keys.has('attack') && !this.isAttacking) {
+      this.startAttack();
+    }
+
     if (this.isJumping) {
       this.updateJump(seconds);
+    }
+
+    // Decrement one-shot timers.
+    if (this.isAttacking) {
+      this.attackTimer -= seconds;
+      if (this.attackTimer <= 0) {
+        this.isAttacking = false;
+      }
+    }
+
+    if (this.isPushing) {
+      this.pushTimer -= seconds;
+      if (this.pushTimer <= 0) {
+        this.isPushing = false;
+      }
     }
 
     // Try to move; collision prevents entering blocked tiles/objects.
@@ -128,27 +155,42 @@ export class PolarBear {
     const nextX = this.pos.x + this.vel.x * seconds;
     const nextY = this.pos.y + this.vel.y * seconds;
 
+    let movedX = false;
+    let movedY = false;
+
     if (!this.isBlocked(nextX, this.pos.y)) {
       this.pos.x = nextX;
+      movedX = true;
     } else {
       this.vel.x = 0;
     }
 
     if (!this.isBlocked(this.pos.x, nextY)) {
       this.pos.y = nextY;
+      movedY = true;
     } else {
       this.vel.y = 0;
+    }
+
+    // If the player tried to move but got blocked, show a push animation.
+    if (moving && !this.isJumping && !this.isAttacking && (!movedX || !movedY)) {
+      this.isPushing = true;
+      this.pushTimer = 0.25;
     }
 
     if (!this.isJumping) {
       this.groundY = this.pos.y;
     }
 
-    // Animation state.
-    if (moving && !this.isJumping) {
+    // Animation state priority: attack > push > walk > idle.
+    if (this.isAttacking) {
+      this.animation.play('attack');
+    } else if (this.isPushing) {
+      this.animation.play('push');
+    } else if (moving && !this.isJumping) {
       this.animation.play(`walk-${this.facing}`);
     } else if (!this.isJumping) {
-      this.animation.play(`idle-${this.facing}`);
+      this.animation.play('idle-breathe');
     }
 
     this.animation.update(dt);
@@ -176,6 +218,11 @@ export class PolarBear {
     this.vel.y = JUMP_VELOCITY;
   }
 
+  private startAttack(): void {
+    this.isAttacking = true;
+    this.attackTimer = 0.4;
+  }
+
   private updateJump(dt: number): void {
     this.jumpTime += dt;
     this.vel.y += GRAVITY_Y * dt;
@@ -195,20 +242,20 @@ export class PolarBear {
     const height = Math.max(0, this.groundY - this.pos.y);
     const scale = Math.max(0.4, Math.min(1, 1 - height / 120));
     this.shadow.setPosition(this.pos.x, this.groundY, 0.1);
-    this.shadow.setSize(36 * scale, 14 * scale);
+    this.shadow.setSize(72 * scale, 28 * scale);
     this.shadow.setOpacity(0.35 * scale);
   }
 
   private createShadowTexture(): THREE.Texture {
     const canvas = document.createElement('canvas');
-    canvas.width = 64;
-    canvas.height = 24;
+    canvas.width = 128;
+    canvas.height = 48;
     const ctx = canvas.getContext('2d')!;
-    const grad = ctx.createRadialGradient(32, 12, 2, 32, 12, 30);
+    const grad = ctx.createRadialGradient(64, 24, 4, 64, 24, 60);
     grad.addColorStop(0, 'rgba(0,0,0,0.45)');
     grad.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, 64, 24);
+    ctx.fillRect(0, 0, 128, 48);
 
     const texture = new THREE.CanvasTexture(canvas);
     texture.magFilter = THREE.NearestFilter;

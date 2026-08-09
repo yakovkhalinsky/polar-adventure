@@ -184,6 +184,9 @@ export class PlayScreen {
       ArrowDown: 'down',
       KeyS: 'down',
       Space: 'jump',
+      KeyX: 'attack',
+      ShiftLeft: 'attack',
+      ShiftRight: 'attack',
     };
 
     const action = map[e.code];
