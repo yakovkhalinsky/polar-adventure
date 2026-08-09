@@ -8,6 +8,7 @@ individual direction frames.
 
 Usage:
     python3 scripts/comfy_generate.py --server http://note:8188 --preview-all
+    python3 scripts/comfy_generate.py --server http://note:8188 --preview-bear-3d
     python3 scripts/comfy_generate.py --server http://note:8188 --promote
 """
 from __future__ import annotations
@@ -24,6 +25,11 @@ from urllib.parse import urljoin
 import numpy as np
 import requests
 from PIL import Image, ImageFilter
+
+try:
+    from rembg import remove as rembg_remove
+except Exception:
+    rembg_remove = None  # type: ignore[assignment]
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "public/assets"
@@ -67,6 +73,23 @@ def require_lora(server: str) -> None:
         print("       Run the setup script, then restart ComfyUI Desktop completely.", file=sys.stderr)
         print("       After restart, verify the LoRA appears in the model list.", file=sys.stderr)
         sys.exit(1)
+
+
+def require_tripo_nodes(server: str) -> None:
+    """Exit with a helpful message if the Tripo custom nodes are not installed."""
+    url = urljoin(server, "/object_info/TripoAPIDraft")
+    try:
+        resp = requests.get(url, timeout=30)
+        resp.raise_for_status()
+        if resp.json().get("TripoAPIDraft"):
+            return
+    except Exception:
+        pass
+    print("ERROR: ComfyUI-Tripo nodes are not installed on the server.", file=sys.stderr)
+    print("       Run one of the setup scripts:", file=sys.stderr)
+    print("         .\\.comfyui-workflows\\setup_windows_comfyui.ps1", file=sys.stderr)
+    print("       Then restart ComfyUI Desktop completely.", file=sys.stderr)
+    sys.exit(1)
 
 
 def base_workflow(width: int, height: int, positive: str, negative: str, seed: int,
@@ -323,6 +346,105 @@ def upload_image(server: str, path: Path) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Tripo 3D helpers
+# ---------------------------------------------------------------------------
+
+
+def tripo_bear_3d_workflow(image_name: str) -> dict[str, Any]:
+    """ComfyUI prompt workflow that sends a bear reference image to Tripo image-to-3D.
+
+    Requires the VAST-AI-Research/ComfyUI-Tripo custom nodes and a TRIPO_API_KEY
+    environment variable (or a key entered in the node UI).
+    """
+    return {
+        "1": {
+            "class_type": "LoadImage",
+            "inputs": {"image": image_name},
+        },
+        "2": {
+            "class_type": "TripoAPIDraft",
+            "inputs": {
+                "mode": "image_to_model",
+                "apikey": "",
+                "prompt": "",
+                "negative_prompt": "",
+                "image": ["1", 0],
+                "model_version": "v3.1-20260211",
+                "texture": True,
+                "pbr": False,
+                "image_seed": 42,
+                "model_seed": 42,
+                "texture_seed": 42,
+                "texture_quality": "standard",
+                "geometry_quality": "standard",
+                "texture_alignment": "original_image",
+                "face_limit": -1,
+                "quad": False,
+                "compress": False,
+                "generate_parts": False,
+                "smart_low_poly": False,
+                "auto_size": False,
+                "orientation": "align_image",
+                "file_prefix": "polar-bear-3d",
+                "output_directory": "",
+            },
+        },
+    }
+
+
+
+def extract_model_file_from_history(entry: dict[str, Any], node_id: str = "2") -> str | None:
+    """Return the Tripo model_file path recorded in the prompt history."""
+    outputs = entry.get("outputs", {})
+    node_outputs = outputs.get(node_id, {})
+    # The TripoAPIDraft node outputs a STRING at slot 0 named model_file.
+    files = node_outputs.get("files", [])
+    if files:
+        return files[0].get("filename") or files[0].get("name")
+    strings = node_outputs.get("string", [])
+    if strings:
+        return strings[0]
+    # Fallback: some ComfyUI versions store plain lists.
+    for key in ("model_file", "STRING"):
+        if key in node_outputs:
+            val = node_outputs[key]
+            if isinstance(val, list):
+                return val[0]
+            return val
+    return None
+
+
+def make_bear_3d(server: str, reference: Path | None = None,
+                 timeout: float = 600.0) -> Path:
+    """Generate a textured GLB for the polar bear using Tripo image-to-3D."""
+    reference = reference or PREVIEW / "characters/bear-reference-down.png"
+    if not reference.exists():
+        raise FileNotFoundError(f"Bear reference not found: {reference}")
+
+    uploaded_name = upload_image(server, reference)
+    workflow = tripo_bear_3d_workflow(uploaded_name)
+
+    prompt_id = submit(server, workflow)
+    print(f"[bear-3d] queued {prompt_id}")
+    entry = poll_until_done(server, prompt_id, timeout=timeout)
+
+    model_file = extract_model_file_from_history(entry, node_id="2")
+    if not model_file:
+        raise RuntimeError(f"Tripo node did not return a model_file path. History: {entry}")
+    print(f"  Tripo model_file: {model_file}")
+
+    # model_file may be a full path like ".../ComfyUI/output/polar-bear-3d_xxx.glb".
+    path = Path(model_file)
+    filename = path.name
+    subfolder = str(path.parent.relative_to(Path("output"))) if "output" in path.parts else ""
+
+    out = PREVIEW / "characters/polar-bear-3d.glb"
+    download_image(server, filename, subfolder, out)
+    print(f"  saved bear 3D preview to {out}")
+    return out
+
+
+# ---------------------------------------------------------------------------
 # Black Forest Labs FLUX API helpers
 # ---------------------------------------------------------------------------
 
@@ -525,12 +647,148 @@ def _isolate_unknown_bg_sprite(img: Image.Image) -> Image.Image:
     return Image.fromarray(arr.astype(np.uint8))
 
 
-def isolate_largest_sprite(img: Image.Image, target_size: int, raw_path: Path | None = None) -> Image.Image:
+def _isolate_with_rembg(img: Image.Image) -> Image.Image | None:
+    """Use the rembg U2Net model to remove the background, then clean the mask.
+
+    rembg's alpha can be too aggressive on white fur, leaving semi-transparent
+    "holes" inside the subject. We threshold the alpha more leniently, run
+    morphological open/close to recover the subject, keep the largest connected
+    component, and fill internal holes. Returns None if rembg is unavailable.
+    """
+    if rembg_remove is None:
+        return None
+    try:
+        rgba = rembg_remove(img).convert("RGBA")
+    except Exception:
+        return None
+
+    arr = np.array(rgba).astype(np.float32)
+    height, width, _ = arr.shape
+    rgb = arr[:, :, :3]
+
+    # rembg returns soft alpha; be lenient so white fur isn't dropped.
+    mask = arr[:, :, 3] > 20
+
+    # Closing: dilate then erode with the same radius to bridge gaps in light
+    # fur and connect the subject without shrinking it.
+    mask_img = Image.fromarray((mask * 255).astype(np.uint8))
+    mask_img = mask_img.filter(ImageFilter.MaxFilter(9))
+    mask_img = mask_img.filter(ImageFilter.MinFilter(9))
+    mask = np.array(mask_img) > 128
+
+    # Keep largest connected component.
+    visited = np.zeros((height, width), bool)
+    largest: list[tuple[int, int]] = []
+    q: deque[tuple[int, int]] = deque()
+    for y in range(height):
+        for x in range(width):
+            if mask[y, x] and not visited[y, x]:
+                comp: list[tuple[int, int]] = []
+                visited[y, x] = True
+                q.append((y, x))
+                while q:
+                    cy, cx = q.popleft()
+                    comp.append((cy, cx))
+                    for dy in (-1, 0, 1):
+                        for dx in (-1, 0, 1):
+                            if dy == 0 and dx == 0:
+                                continue
+                            ny, nx = cy + dy, cx + dx
+                            if 0 <= ny < height and 0 <= nx < width:
+                                if mask[ny, nx] and not visited[ny, nx]:
+                                    visited[ny, nx] = True
+                                    q.append((ny, nx))
+                if len(comp) > len(largest):
+                    largest = comp
+
+    if not largest:
+        return rgba
+
+    keep = np.zeros((height, width), bool)
+    for y, x in largest:
+        keep[y, x] = True
+
+    # Fill holes by flood-filling background from the image border.
+    holes = np.zeros((height, width), bool)
+    for y in range(height):
+        for x in (0, width - 1):
+            if not keep[y, x] and not holes[y, x]:
+                holes[y, x] = True
+                q.append((y, x))
+    for x in range(width):
+        for y in (0, height - 1):
+            if not keep[y, x] and not holes[y, x]:
+                holes[y, x] = True
+                q.append((y, x))
+    while q:
+        y, x = q.popleft()
+        for dy in (-1, 0, 1):
+            for dx in (-1, 0, 1):
+                if dy == 0 and dx == 0:
+                    continue
+                ny, nx = y + dy, x + dx
+                if 0 <= ny < height and 0 <= nx < width:
+                    if not keep[ny, nx] and not holes[ny, nx]:
+                        holes[ny, nx] = True
+                        q.append((ny, nx))
+
+    keep = ~holes
+
+    # Remove any ground shadow that rembg left at the bottom of the subject.
+    # Shadow pixels are low-saturation grey, in the bottom ~12% of the bbox.
+    max_rgb = rgb.max(axis=2)
+    min_rgb = rgb.min(axis=2)
+    saturation = np.where(max_rgb > 0, (max_rgb - min_rgb) / max_rgb, 0)
+
+    coords = np.argwhere(keep)
+    if len(coords) > 0:
+        y1, _ = coords.min(axis=0)
+        y2, _ = coords.max(axis=0) + 1
+        bottom_cutoff = y1 + int((y2 - y1) * 0.88)
+        is_shadow = (
+            keep
+            & (np.arange(height)[:, None] >= bottom_cutoff)
+            & (saturation < 0.20)
+            & (max_rgb > 40)
+            & (max_rgb < 250)
+        )
+
+        # Only remove shadow connected to the bottom edge.
+        visited = np.zeros((height, width), bool)
+        shadow_to_remove = np.zeros((height, width), bool)
+        for x in range(width):
+            if is_shadow[height - 1, x] and not visited[height - 1, x]:
+                visited[height - 1, x] = True
+                q.append((height - 1, x))
+                while q:
+                    y, x = q.popleft()
+                    shadow_to_remove[y, x] = True
+                    for dy, dx in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+                        ny, nx = y + dy, x + dx
+                        if 0 <= ny < height and 0 <= nx < width:
+                            if is_shadow[ny, nx] and not visited[ny, nx]:
+                                visited[ny, nx] = True
+                                q.append((ny, nx))
+
+        keep = keep & ~shadow_to_remove
+
+    # Final smoothing.
+    mask_img = Image.fromarray((keep * 255).astype(np.uint8))
+    mask_img = mask_img.filter(ImageFilter.MaxFilter(3))
+    mask_img = mask_img.filter(ImageFilter.MinFilter(3))
+    keep = np.array(mask_img) > 128
+
+    arr[~keep, 3] = 0
+    return Image.fromarray(arr.astype(np.uint8))
+
+
+def isolate_largest_sprite(img: Image.Image, target_size: int, raw_path: Path | None = None,
+                           force_rembg: bool = False) -> Image.Image:
     """Crop to the largest foreground region and make the background transparent.
 
     Auto-detects a near-pure white background (typical of BFL/FLUX output) and uses
-    a fast morphological mask. Falls back to adaptive flood fill for colored/gradient
-    backgrounds (typical of ComfyUI output).
+    rembg when available for clean shadow removal. Falls back to a fast morphological
+    mask, then to adaptive flood fill for colored/gradient backgrounds.
     """
     rgba = img.convert("RGBA")
     if raw_path is not None:
@@ -551,10 +809,15 @@ def isolate_largest_sprite(img: Image.Image, target_size: int, raw_path: Path | 
     border_arr = np.array(border)
     mostly_white = np.all(border_arr > 250, axis=1).mean() > 0.95
 
-    if mostly_white:
-        isolated = _isolate_white_bg_sprite(rgba)
-    else:
-        isolated = _isolate_unknown_bg_sprite(rgba)
+    isolated: Image.Image | None = None
+    if (mostly_white or force_rembg) and rembg_remove is not None:
+        isolated = _isolate_with_rembg(rgba)
+
+    if isolated is None:
+        if mostly_white:
+            isolated = _isolate_white_bg_sprite(rgba)
+        else:
+            isolated = _isolate_unknown_bg_sprite(rgba)
 
     # Crop to the non-transparent bounding box.
     alpha = np.array(isolated.split()[-1])
@@ -892,6 +1155,7 @@ def main() -> None:
     parser.add_argument("--preview-all", action="store_true", help="Generate all single preview assets")
     parser.add_argument("--preview-bear", action="store_true", help="Generate polar bear reference + directions + sheet")
     parser.add_argument("--preview-bear-ref", action="store_true", help="Generate front-facing reference preview sheet only")
+    parser.add_argument("--preview-bear-3d", action="store_true", help="Generate a textured GLB of the polar bear via Tripo image-to-3D")
     parser.add_argument("--preview-tiles", action="store_true", help="Generate tile atlas")
     parser.add_argument("--promote", action="store_true", help="Copy previews to active asset folders")
     parser.add_argument("--no-lora", action="store_true", help="Use CartoonXL without the Voxel XL LoRA (not voxel style)")
@@ -982,6 +1246,16 @@ def main() -> None:
             make_bear_reference_preview_with_ref(ref)
         except Exception as exc:
             print(f"[bear-reference-preview] failed: {exc}", file=sys.stderr)
+            sys.exit(1)
+
+    if args.preview_bear_3d:
+        require_tripo_nodes(args.server)
+        if not os.environ.get("TRIPO_API_KEY"):
+            print("WARN: TRIPO_API_KEY is not set. The Tripo node may fail unless the key is entered in its UI widget.", file=sys.stderr)
+        try:
+            make_bear_3d(args.server, reference=args.style_ref, timeout=900.0)
+        except Exception as exc:
+            print(f"[bear-3d] failed: {exc}", file=sys.stderr)
             sys.exit(1)
 
     if args.preview_tiles:

@@ -143,7 +143,8 @@ if (-not $SkipModels) {
 # -----------------------------------------------------------------------------
 $nodes = @(
     @{ Repo = "https://github.com/huchenlei/ComfyUI-layerdiffuse.git"; Name = "ComfyUI-layerdiffuse" },
-    @{ Repo = "https://github.com/Jcd1230/rembg-comfyui-node.git"; Name = "rembg-comfyui-node" }
+    @{ Repo = "https://github.com/Jcd1230/rembg-comfyui-node.git"; Name = "rembg-comfyui-node" },
+    @{ Repo = "https://github.com/VAST-AI-Research/ComfyUI-Tripo.git"; Name = "ComfyUI-Tripo" }
 )
 
 if (-not $SkipNodes) {
@@ -165,6 +166,11 @@ if (-not $SkipNodes) {
             }
         }
     }
+
+    Write-Host "`nTripo node note:" -ForegroundColor Yellow
+    Write-Host "  ComfyUI-Tripo requires a Tripo API key. Set the TRIPO_API_KEY environment" -ForegroundColor Cyan
+    Write-Host "  variable or enter it in the Tripo: Generate model node. Get a key at:" -ForegroundColor Cyan
+    Write-Host "    https://developers.tripo3d.ai/" -ForegroundColor Cyan
 
     Write-Host "`nOptional node note:" -ForegroundColor Yellow
     Write-Host "  ComfyUI-AdvancedTiling is optional. It can fail to install through ComfyUI Manager." -ForegroundColor Cyan

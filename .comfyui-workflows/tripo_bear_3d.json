@@ -1,0 +1,78 @@
+{
+  "last_node_id": 2,
+  "last_link_id": 1,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "LoadImage",
+      "pos": [100, 130],
+      "size": [320, 280],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        ["IMAGE", 0],
+        ["MASK", 1]
+      ],
+      "widgets_values": [
+        "bear-reference-down.png"
+      ],
+      "title": "Load Bear Reference"
+    },
+    {
+      "id": 2,
+      "type": "TripoAPIDraft",
+      "pos": [480, 130],
+      "size": [360, 520],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 1
+        }
+      ],
+      "outputs": [
+        ["STRING", 0],
+        ["MODEL_INFO", 1]
+      ],
+      "widgets_values": [
+        "image_to_model",
+        "",
+        "",
+        "",
+        "",
+        "v3.1-20260211",
+        true,
+        false,
+        42,
+        42,
+        42,
+        "standard",
+        "standard",
+        "original_image",
+        -1,
+        false,
+        false,
+        false,
+        false,
+        "align_image",
+        "polar-bear-3d",
+        ""
+      ],
+      "title": "Tripo: Generate Bear 3D"
+    }
+  ],
+  "links": [
+    [1, 1, 0, 2, 0, "IMAGE"]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "workflow_notes": "Upload the bear reference as bear-reference-down.png into ComfyUI's input folder, then run. The TripoAPIDraft node downloads a textured GLB into ComfyUI's output folder. The model_file string output is read by scripts/comfy_generate.py via the history endpoint."
+  },
+  "version": 0.4
+}

@@ -294,7 +294,8 @@ if (-not $SkipModels) {
 # ---------------------------------------------------------------------------
 $nodes = @(
     @{ Repo = "https://github.com/huchenlei/ComfyUI-layerdiffuse.git"; Name = "ComfyUI-layerdiffuse" },
-    @{ Repo = "https://github.com/Jcd1230/rembg-comfyui-node.git"; Name = "rembg-comfyui-node" }
+    @{ Repo = "https://github.com/Jcd1230/rembg-comfyui-node.git"; Name = "rembg-comfyui-node" },
+    @{ Repo = "https://github.com/VAST-AI-Research/ComfyUI-Tripo.git"; Name = "ComfyUI-Tripo" }
 )
 
 if (-not $SkipNodes) {
@@ -326,6 +327,12 @@ if (-not $SkipNodes) {
             }
         }
     }
+
+    Write-Host ""
+    Write-Warn "Tripo node note:"
+    Write-Info "  ComfyUI-Tripo requires a Tripo API key. Set the TRIPO_API_KEY environment"
+    Write-Info "  variable or enter it in the Tripo: Generate model node. Get a key at:"
+    Write-Info "    https://developers.tripo3d.ai/"
 
     Write-Host ""
     Write-Warn "Optional node note:"
