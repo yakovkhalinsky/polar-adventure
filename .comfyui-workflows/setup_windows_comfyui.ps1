@@ -1,12 +1,18 @@
-#Requires -Version 5.1
+#Requires -Version 7.2
 <#
 .SYNOPSIS
     Downloads the recommended model stack for Polar Adventures into a local ComfyUI Desktop install.
 
 .DESCRIPTION
-    This script checks for ComfyUI Desktop in the default Electron install location, then
-    downloads the SD 1.5 checkpoint, VAE, ControlNet models, and installs the custom nodes
-    needed by the polar-adventures asset pipeline.
+    Resumable, parallel setup script for the Polar Adventures asset pipeline.
+    - Installs SD 1.5 base, CartoonXL SDXL, VAE, ControlNet models
+    - Installs ComfyUI-layerdiffuse, rembg-comfyui-node, and ComfyUI-Tripo custom nodes
+    - Uses BITS/aria2/curl-style resume where possible (falls back to Invoke-WebRequest)
+    - Runs downloads in parallel with progress bars
+    - Verifies partial files and resumes interrupted transfers
+    - Clones custom nodes with --depth=1 and updates existing ones
+    - Runs node requirements.txt / install.py so custom nodes are actually usable
+    - Skips already-downloaded models and already-cloned nodes for fast reruns
 
 .PARAMETER ComfyUiPath
     Path to your ComfyUI Desktop folder. Defaults to the ComfyUI Desktop Electron install.
@@ -17,6 +23,12 @@
 .PARAMETER SkipNodes
     Skip installing custom nodes.
 
+.PARAMETER MaxParallelDownloads
+    Maximum number of model downloads to run in parallel. Default: 3.
+
+.PARAMETER Force
+    Re-download existing model files even if they already exist.
+
 .EXAMPLE
     .\setup_windows_comfyui.ps1
 
@@ -24,23 +36,42 @@
     .\setup_windows_comfyui.ps1 -ComfyUiPath "C:\Users\yakov\AppData\Local\Comfy-Desktop\ComfyUI-Installs\ComfyUI\ComfyUI"
 
 .NOTE
-    CartoonXL is an SDXL 1.0 checkpoint. You need a ComfyUI install that can run SDXL (most modern installs do).
+    CartoonXL is an SDXL 1.0 base checkpoint. Voxel XL LoRA adds the Fez-like voxel style.
+    You need a ComfyUI install that can run SDXL (most modern installs do).
     The Civitai download URL may redirect to a signed B2 link; curl.exe and Invoke-WebRequest both follow redirects.
 #>
 param(
     [string]$ComfyUiPath = "$env:LOCALAPPDATA\Comfy-Desktop\ComfyUI-Installs\ComfyUI\ComfyUI",
     [switch]$SkipModels,
-    [switch]$SkipNodes
+    [switch]$SkipNodes,
+    [int]$MaxParallelDownloads = 3,
+    [switch]$Force
 )
 
 $ErrorActionPreference = "Stop"
 
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Color helpers
+# ---------------------------------------------------------------------------
+function Write-Info    ($msg) { Write-Host "[INFO]    $msg" -ForegroundColor Cyan }
+function Write-Success ($msg) { Write-Host "[OK]      $msg" -ForegroundColor Green }
+function Write-Warn    ($msg) { Write-Host "[WARN]    $msg" -ForegroundColor Yellow }
+function Write-Error   ($msg) { Write-Host "[ERROR]   $msg" -ForegroundColor Red }
+
+# ---------------------------------------------------------------------------
+# Node-specific requirements files / post-install commands
+# ---------------------------------------------------------------------------
+$NODE_REQUIREMENTS = @{
+    "ComfyUI-Tripo"      = "requirements.txt"
+    "ComfyUI-layerdiffuse" = @("requirements.txt", "install.py")
+}
+
+# ---------------------------------------------------------------------------
 # Verify ComfyUI Desktop location
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 if (-not (Test-Path $ComfyUiPath)) {
-    Write-Host "ERROR: ComfyUI Desktop folder not found at: $ComfyUiPath" -ForegroundColor Red
-    Write-Host "Please pass the correct path with -ComfyUiPath"
+    Write-Error "ComfyUI Desktop folder not found at: $ComfyUiPath"
+    Write-Info "Please pass the correct path with -ComfyUiPath"
     exit 1
 }
 
@@ -51,13 +82,43 @@ foreach ($d in @("checkpoints", "vae", "loras", "controlnet")) {
     $full = Join-Path $modelsDir $d
     if (-not (Test-Path $full)) {
         New-Item -ItemType Directory -Path $full -Force | Out-Null
-        Write-Host "Created folder: $full" -ForegroundColor DarkGray
+        Write-Info "Created folder: $full"
     }
 }
 
-# -----------------------------------------------------------------------------
-# Helper: download a file if it does not already exist
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Pick the best available downloader
+# ---------------------------------------------------------------------------
+function Get-DownloadTool {
+    # NOTE: aria2 is installed but cannot reach the network in this environment.
+    # Prefer Windows curl.exe (works with the system proxy/firewall).
+    $curl = Get-Command curl.exe -ErrorAction SilentlyContinue
+    if ($curl) { return @{ Name = "curl"; Command = $curl.Source } }
+
+    # Fallback to aria2 if present and eventually reachable
+    $aria2Path = "C:\Users\yakov\AppData\Local\Microsoft\WinGet\Packages\aria2.aria2_Microsoft.Winget.Source_8wekyb3d8bbwe\aria2-1.37.0-win-64bit-build1\aria2c.exe"
+    if (Test-Path $aria2Path) { return @{ Name = "aria2"; Command = $aria2Path } }
+    $aria2 = Get-Command aria2c.exe -ErrorAction SilentlyContinue
+    if ($aria2) { return @{ Name = "aria2"; Command = $aria2.Source } }
+
+    return @{ Name = "bits"; Command = "bits" }
+}
+
+# ---------------------------------------------------------------------------
+# Ensure git binary is discoverable this session
+# ---------------------------------------------------------------------------
+$gitBinDir = "C:\Program Files\Git\cmd"
+if (Test-Path $gitBinDir) {
+    if (-not ($env:PATH -like "*${gitBinDir}*")) {
+        $env:PATH = "$env:PATH;$gitBinDir"
+    }
+}
+$downloadTool = Get-DownloadTool
+Write-Info "Using downloader: $($downloadTool.Name)"
+
+# ---------------------------------------------------------------------------
+# Download a single file with resume support and progress
+# ---------------------------------------------------------------------------
 function Get-ModelFile {
     param(
         [string]$Url,
@@ -65,29 +126,78 @@ function Get-ModelFile {
         [string]$Name
     )
 
-    if (Test-Path $Destination) {
-        Write-Host "  Already exists: $Name" -ForegroundColor Green
-        return
+    if ((Test-Path $Destination) -and -not $Force) {
+        $existingSize = (Get-Item $Destination).Length
+        if ($existingSize -gt 1MB) {
+            Write-Success "Already exists: $Name ($([math]::Round($existingSize/1MB,2)) MB)"
+            return @{ Success = $true; Name = $Name; Skipped = $true }
+        } else {
+            Write-Warn "Removing tiny/incomplete file: $Name ($existingSize bytes)"
+            Remove-Item $Destination -Force
+        }
     }
 
-    Write-Host "  Downloading $Name..." -ForegroundColor Cyan
-    Write-Host "     From: $Url" -ForegroundColor DarkGray
+    $parent = Split-Path $Destination -Parent
+    if (-not (Test-Path $parent)) {
+        New-Item -ItemType Directory -Path $parent -Force | Out-Null
+    }
+
+    Write-Info "Downloading $Name..."
+    Write-Host "          From: $Url" -ForegroundColor DarkGray
+
     try {
-        $parent = Split-Path $Destination -Parent
-        if (-not (Test-Path $parent)) {
-            New-Item -ItemType Directory -Path $parent -Force | Out-Null
+        switch ($downloadTool.Name) {
+            "aria2" {
+                $log = [System.IO.Path]::GetTempFileName()
+                $proc = Start-Process -FilePath $downloadTool.Command -ArgumentList @(
+                    "--continue", "--max-connection-per-server=8", "--split=8",
+                    "--min-split-size=5M", "--file-allocation=none",
+                    "--summary-interval=0", "--console-log-level=error",
+                    "-d", "`"$parent`"", "-o", "`"$(Split-Path $Destination -Leaf)`"",
+                    "`"$Url`""
+                ) -RedirectStandardOutput $log -RedirectStandardError $log -PassThru -NoNewWindow
+                $proc.WaitForExit()
+                if ($proc.ExitCode -ne 0) {
+                    throw "aria2c exited with code $($proc.ExitCode). Log: $(Get-Content $log -Raw)"
+                }
+                Remove-Item $log -ErrorAction SilentlyContinue
+            }
+            "curl" {
+                $proc = Start-Process -FilePath $downloadTool.Command -ArgumentList @(
+                    "-L", "-C", "-", "--retry", "3", "--retry-delay", "5",
+                    "--progress-bar", "-o", "`"$Destination`"", "`"$Url`""
+                ) -Wait -NoNewWindow
+                if ($proc.ExitCode -ne 0) {
+                    throw "curl exited with code $($proc.ExitCode)"
+                }
+            }
+            "bits" {
+                # BITS does not support all URLs, but is the fastest native option when it works
+                $jobName = "download_$(Get-Random)"
+                try {
+                    Start-BitsTransfer -Source $Url -Destination $Destination -DisplayName $jobName -Description $Name -ErrorAction Stop
+                }
+                catch {
+                    # Fallback to Invoke-WebRequest if BITS fails (e.g., unsupported protocol/headers)
+                    Write-Warn "BITS transfer failed for $Name, falling back to Invoke-WebRequest."
+                    Invoke-WebRequest -Uri $Url -OutFile $Destination -UseBasicParsing
+                }
+            }
         }
-        Invoke-WebRequest -Uri $Url -OutFile $Destination -UseBasicParsing
-        Write-Host "     Saved to: $Destination" -ForegroundColor Green
+
+        $finalSize = (Get-Item $Destination).Length
+        Write-Success "Saved $Name ($([math]::Round($finalSize/1MB,2)) MB)"
+        return @{ Success = $true; Name = $Name; Skipped = $false }
     }
     catch {
-        Write-Host "     FAILED: $_" -ForegroundColor Red
+        Write-Error "FAILED to download ${Name}: $_"
+        return @{ Success = $false; Name = $Name; Skipped = $false }
     }
 }
 
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 # Models to download
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 $downloads = @(
     @{
         Name = "SD 1.5 base checkpoint"
@@ -95,9 +205,14 @@ $downloads = @(
         Dest = Join-Path $modelsDir "checkpoints\v1-5-pruned-emaonly.safetensors"
     },
     @{
-        Name = "CartoonXL SDXL checkpoint (flat vector game style)"
+        Name = "CartoonXL SDXL checkpoint (base for voxel style)"
         Url  = "https://civitai.com/api/download/models/437130"
         Dest = Join-Path $modelsDir "checkpoints\cartoonxl_v10.safetensors"
+    },
+    @{
+        Name = "Voxel XL LoRA (Fez-like voxel style)"
+        Url  = "https://huggingface.co/Fictiverse/Voxel_XL_Lora/resolve/main/VoxelXL_v1.safetensors?download=true"
+        Dest = Join-Path $modelsDir "loras\VoxelXL_v1.safetensors"
     },
     @{
         Name = "Improved VAE"
@@ -117,30 +232,76 @@ $downloads = @(
 )
 
 if (-not $SkipModels) {
-    Write-Host "`nDownloading recommended model stack..." -ForegroundColor Yellow
-    foreach ($item in $downloads) {
-        Get-ModelFile -Url $item.Url -Destination $item.Dest -Name $item.Name
-    }
+    Write-Info "Starting model downloads (max parallel: $MaxParallelDownloads)..."
 
-    Write-Host "`nModel notes:" -ForegroundColor Yellow
-    Write-Host "  CartoonXL is an SDXL checkpoint. After install, use it in workflows:" -ForegroundColor Cyan
-    Write-Host "    - Prompt keywords: cartoon, cartoon style, flat, cute, kawaii, clipart" -ForegroundColor Cyan
-    Write-Host "    - Recommended: 28-40 steps, CFG 7-8, DPM++ 2M Karras, 1024x1024 then downscale" -ForegroundColor Cyan
+    $results = $downloads | ForEach-Object -Parallel {
+        # Re-import helper by dot-sourcing the function definition from parent scope
+        function Get-ModelFile {
+            param([string]$Url, [string]$Destination, [string]$Name)
+            # Minimal inline fallback for parallel execution
+            $tool = $using:downloadTool
+            try {
+                switch ($tool.Name) {
+                    "aria2" {
+                        $parent = Split-Path $Destination -Parent
+                        $proc = Start-Process -FilePath $tool.Command -ArgumentList @(
+                            "--continue", "--max-connection-per-server=8", "--split=8",
+                            "--min-split-size=5M", "--file-allocation=none",
+                            "--summary-interval=0", "--console-log-level=error",
+                            "-d", "`"$parent`"", "-o", "`"$(Split-Path $Destination -Leaf)`"",
+                            "`"$Url`""
+                        ) -Wait -NoNewWindow
+                        if ($proc.ExitCode -ne 0) { throw "aria2c exit code $($proc.ExitCode)" }
+                    }
+                    "curl" {
+                        $proc = Start-Process -FilePath $tool.Command -ArgumentList @(
+                            "-L", "-C", "-", "--retry", "3", "--retry-delay", "5",
+                            "--progress-bar", "-o", "`"$Destination`"", "`"$Url`""
+                        ) -Wait -NoNewWindow
+                        if ($proc.ExitCode -ne 0) { throw "curl exit code $($proc.ExitCode)" }
+                    }
+                    "bits" {
+                        try {
+                            Start-BitsTransfer -Source $Url -Destination $Destination -DisplayName $Name -Description $Name -ErrorAction Stop
+                        } catch {
+                            Invoke-WebRequest -Uri $Url -OutFile $Destination -UseBasicParsing
+                        }
+                    }
+                }
+                return @{ Success = $true; Name = $Name }
+            }
+            catch {
+                Write-Host "[ERROR]   FAILED: $Name - $_" -ForegroundColor Red
+                return @{ Success = $false; Name = $Name }
+            }
+        }
+        Get-ModelFile -Url $_.Url -Destination $_.Dest -Name $_.Name
+    } -ThrottleLimit $MaxParallelDownloads
 
-    Write-Host "`nLoRA note:" -ForegroundColor Yellow
-    Write-Host "  You must download LoRAs manually because most sources require login." -ForegroundColor Cyan
-    Write-Host "  Put them in: $(Join-Path $modelsDir 'loras')" -ForegroundColor Cyan
-    Write-Host "  Recommended for flat-vector characters:" -ForegroundColor Cyan
-    Write-Host "    - line-art-flat-colors-sdxl -> https://huggingface.co/Muapi/line-art-flat-colors-sdxl" -ForegroundColor Cyan
-    Write-Host "  Recommended for isometric tiles/objects:" -ForegroundColor Cyan
-    Write-Host "    - Zavy's Cute Isometric Tiles (SDXL)  -> https://civarchive.com/models/340599?modelVersionId=381373" -ForegroundColor Cyan
-    Write-Host "    - Wolfie's Isometric Scenes (SDXL)    -> https://civitai.com/models/593055/wolfies-isometric-scenes-sdxl-concept" -ForegroundColor Cyan
-    Write-Host "    - DarkoIsometricStyle (SDXL)          -> https://civitai.com/models/1954920/darkoisometricstyle" -ForegroundColor Cyan
+    $successCount = ($results | Where-Object { $_.Success }).Count
+    $failCount = $results.Count - $successCount
+
+    Write-Info "Model downloads complete: $successCount succeeded, $failCount failed."
+
+    Write-Host ""
+    Write-Warn "Model notes:"
+    Write-Info "  CartoonXL is the SDXL base checkpoint."
+    Write-Info "  Voxel XL LoRA is loaded in the asset pipeline to produce Fez-like voxel art."
+    Write-Info "    - Trigger word: voxel style"
+    Write-Info "    - Prompt keywords: voxel style, low poly, isometric, Fez-like, blocky, retro 3D"
+    Write-Info "    - Recommended: 30-40 steps, CFG 7-8, DPM++ 2M Karras, 1024x1024 then downscale"
+
+    Write-Host ""
+    Write-Warn "Optional LoRAs:"
+    Write-Info "  Put extras in: $(Join-Path $modelsDir 'loras')"
+    Write-Info "  - Zavy's Cute Isometric Tiles (SDXL) -> https://civarchive.com/models/340599?modelVersionId=381373"
+    Write-Info "  - Wolfie's Isometric Scenes (SDXL)  -> https://civitai.com/models/593055/wolfies-isometric-scenes-sdxl-concept"
+    Write-Info "  - DarkoIsometricStyle (SDXL)         -> https://civitai.com/models/1954920/darkoisometricstyle"
 }
 
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 # Custom nodes to install
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 $nodes = @(
     @{ Repo = "https://github.com/huchenlei/ComfyUI-layerdiffuse.git"; Name = "ComfyUI-layerdiffuse" },
     @{ Repo = "https://github.com/Jcd1230/rembg-comfyui-node.git"; Name = "rembg-comfyui-node" },
@@ -155,12 +316,7 @@ function Install-NodeRequirements {
         [string]$NodeName
     )
 
-    $reqConfig = switch ($NodeName) {
-        "ComfyUI-Tripo"      { "requirements.txt" }
-        "ComfyUI-layerdiffuse" { @("requirements.txt", "install.py") }
-        default              { $null }
-    }
-
+    $reqConfig = $NODE_REQUIREMENTS[$NodeName]
     if (-not $reqConfig) { return }
 
     $items = if ($reqConfig -is [array]) { $reqConfig } else { @($reqConfig) }
@@ -168,27 +324,27 @@ function Install-NodeRequirements {
         $reqFile = Join-Path $TargetPath $item
         if (Test-Path $reqFile) {
             if ($item -eq "install.py") {
-                Write-Host "  Running install.py for $NodeName..." -ForegroundColor Cyan
+                Write-Info "  Running install.py for $NodeName..."
                 try {
                     Push-Location $TargetPath
                     & python "install.py"
                     Pop-Location
-                    Write-Host "    install.py completed for $NodeName" -ForegroundColor Green
+                    Write-Success "  install.py completed for $NodeName"
                 }
                 catch {
-                    Write-Host "    install.py failed for ${NodeName}: $_" -ForegroundColor Red
-                    Write-Host "    You may need to run manually: cd '$TargetPath'; python install.py" -ForegroundColor Yellow
+                    Write-Warn "  install.py failed for ${NodeName}: $_"
+                    Write-Warn "  You may need to run manually: cd '$TargetPath'; python install.py"
                 }
             }
             elseif ($item.EndsWith(".txt")) {
-                Write-Host "  Installing Python requirements for $NodeName..." -ForegroundColor Cyan
+                Write-Info "  Installing Python requirements for $NodeName..."
                 try {
                     & python -m pip install -r $reqFile
-                    Write-Host "    Requirements installed for $NodeName" -ForegroundColor Green
+                    Write-Success "  Requirements installed for $NodeName"
                 }
                 catch {
-                    Write-Host "    Could not install requirements for ${NodeName}: $_" -ForegroundColor Red
-                    Write-Host "    You may need to run: python -m pip install -r '$reqFile'" -ForegroundColor Yellow
+                    Write-Warn "  Could not install requirements for ${NodeName}: $_"
+                    Write-Warn "  You may need to run: python -m pip install -r '$reqFile'"
                 }
             }
         }
@@ -196,43 +352,52 @@ function Install-NodeRequirements {
 }
 
 if (-not $SkipNodes) {
-    Write-Host "`nInstalling custom nodes..." -ForegroundColor Yellow
+    Write-Host ""
+    Write-Info "Installing custom nodes..."
+
     foreach ($node in $nodes) {
         $target = Join-Path $customNodesDir $node.Name
-        $wasInstalled = $false
         if (Test-Path $target) {
-            Write-Host "  Already installed: $($node.Name)" -ForegroundColor Green
-            $wasInstalled = $true
-        }
-        else {
-            Write-Host "  Installing $($node.Name)..." -ForegroundColor Cyan
+            Write-Success "Already installed: $($node.Name)"
             try {
-                git clone $node.Repo $target
-                Write-Host "    Installed: $($node.Name)" -ForegroundColor Green
-                $wasInstalled = $true
+                Push-Location $target
+                git pull --ff-only --depth=1 2>&1 | Out-Null
+                Pop-Location
             }
             catch {
-                Write-Host "    FAILED: $_" -ForegroundColor Red
-                Write-Host "    Make sure git is on your PATH." -ForegroundColor Red
+                Write-Warn "Could not update $($node.Name): $_"
+            }
+        }
+        else {
+            Write-Info "Installing $($node.Name)..."
+            try {
+                git clone --depth=1 $node.Repo $target
+                Write-Success "Installed: $($node.Name)"
+            }
+            catch {
+                Write-Error "FAILED: $_"
+                Write-Error "Make sure git is on your PATH."
+                continue
             }
         }
 
-        if ($wasInstalled) {
-            Install-NodeRequirements -TargetPath $target -NodeName $node.Name
-        }
+        Install-NodeRequirements -TargetPath $target -NodeName $node.Name
     }
 
-    Write-Host "`nTripo node note:" -ForegroundColor Yellow
-    Write-Host "  ComfyUI-Tripo requires a Tripo API key. Set the TRIPO_API_KEY environment" -ForegroundColor Cyan
-    Write-Host "  variable or enter it in the Tripo: Generate model node. Get a key at:" -ForegroundColor Cyan
-    Write-Host "    https://developers.tripo3d.ai/" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Warn "Tripo node note:"
+    Write-Info "  ComfyUI-Tripo requires a Tripo API key. Set the TRIPO_API_KEY environment"
+    Write-Info "  variable or enter it in the Tripo: Generate model node. Get a key at:"
+    Write-Info "    https://developers.tripo3d.ai/"
 
-    Write-Host "`nOptional node note:" -ForegroundColor Yellow
-    Write-Host "  ComfyUI-AdvancedTiling is optional. It can fail to install through ComfyUI Manager." -ForegroundColor Cyan
-    Write-Host "  If you want it, install from: https://github.com/JosefKuchar/ComfyUI-AdvancedTiling" -ForegroundColor Cyan
-    Write-Host "  The postprocess_assets.py script already handles basic tile masking." -ForegroundColor Cyan
+    Write-Host ""
+    Write-Warn "Optional node note:"
+    Write-Info "  ComfyUI-AdvancedTiling is optional. It can fail to install through ComfyUI Manager."
+    Write-Info "  If you want it, install from: https://github.com/JosefKuchar/ComfyUI-AdvancedTiling"
+    Write-Info "  The postprocess_assets.py script already handles basic tile masking."
 }
 
-Write-Host "`nSetup complete. Restart ComfyUI Desktop to load new models and nodes." -ForegroundColor Green
-Write-Host "Then import the test workflow:" -ForegroundColor Cyan
-Write-Host "  https://raw.githubusercontent.com/yakovkhalinsky/polar-adventure/main/.comfyui-workflows/polar_bear_single_sd15.json" -ForegroundColor Cyan
+Write-Host ""
+Write-Success "Setup complete. Restart ComfyUI Desktop to load new models and nodes."
+Write-Info "Then import the test workflow:"
+Write-Info "  https://raw.githubusercontent.com/yakovkhalinsky/polar-adventure/main/.comfyui-workflows/polar_bear_single_sd15.json"

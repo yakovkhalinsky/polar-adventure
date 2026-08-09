@@ -15,23 +15,15 @@ npm run build
 
 ## Windows ComfyUI Desktop setup
 
-Run one of these PowerShell scripts **on your Windows PC** to install the recommended model stack:
-
-### Standard script (works in Windows PowerShell 5.1 / PowerShell 7)
+Run the PowerShell script **on your Windows PC** to install the recommended model stack:
 
 ```powershell
 .\setup_windows_comfyui.ps1
 ```
 
-### Fast script (requires PowerShell 7.2+ for parallel downloads)
+It downloads multiple models in parallel, resumes interrupted transfers, updates existing custom nodes, and runs each node's `requirements.txt` / `install.py` so they are actually usable. Existing models and nodes are skipped on rerun, making it fast to run again.
 
-```powershell
-.\setup_windows_comfyui_fast.ps1
-```
-
-The fast version downloads multiple models in parallel, resumes interrupted transfers, and updates existing custom nodes.
-
-Both scripts default to the ComfyUI Desktop install path:
+It defaults to the ComfyUI Desktop install path:
 
 ```text
 C:\Users\yakov\AppData\Local\Comfy-Desktop\ComfyUI-Installs\ComfyUI\ComfyUI

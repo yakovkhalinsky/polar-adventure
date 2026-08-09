@@ -88,7 +88,7 @@ def require_tripo_nodes(server: str) -> None:
     except Exception:
         pass
     print("ERROR: ComfyUI-Tripo nodes are not installed on the server.", file=sys.stderr)
-    print("       Run one of the setup scripts:", file=sys.stderr)
+    print("       Run the setup script:", file=sys.stderr)
     print("         .\\.comfyui-workflows\\setup_windows_comfyui.ps1", file=sys.stderr)
     print("       Then restart ComfyUI Desktop completely.", file=sys.stderr)
     sys.exit(1)
