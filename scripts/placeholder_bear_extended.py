@@ -134,8 +134,13 @@ def draw_idle_breathe(draw, col, row, frame_idx):
     head_r = 22
     head_y = body_top - 12
     draw_ellipse(draw, [cx - head_r, head_y - head_r, cx + head_r, head_y + head_r], "#ffffff")
-    draw_ellipse(draw, [cx - 12, head_y - 4, cx - 4, head_y + 4], "#111111")
-    draw_ellipse(draw, [cx + 4, head_y - 4, cx + 12, head_y + 4], "#111111")
+    # Blink on frames 1 and 3 for a gentle idle.
+    if frame_idx in (1, 3):
+        draw.line([(cx - 12, head_y), (cx - 4, head_y)], fill="#111111", width=2)
+        draw.line([(cx + 4, head_y), (cx + 12, head_y)], fill="#111111", width=2)
+    else:
+        draw_ellipse(draw, [cx - 12, head_y - 4, cx - 4, head_y + 4], "#111111")
+        draw_ellipse(draw, [cx + 4, head_y - 4, cx + 12, head_y + 4], "#111111")
     draw_ellipse(draw, [cx - 4, head_y + 8, cx + 4, head_y + 16], "#111111")
 
 ROW_DRAWERS = [

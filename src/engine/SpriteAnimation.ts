@@ -1,16 +1,21 @@
 import * as THREE from 'three';
 
+export type AnimationDirection = 'forward' | 'pingpong';
+
 export interface AnimationClip {
   name: string;
   row: number;
   frames: number;
   fps: number;
   loop: boolean;
+  /** Play forward or bounce back and forth (default: forward). */
+  direction?: AnimationDirection;
 }
 
 /**
  * Drives spritesheet animation on a Three.js texture by updating `repeat` and
- * `offset`. Assumes a uniform grid of frames.
+ * `offset`. Assumes a uniform grid of frames. Supports forward and ping-pong
+ * loops for gentle idle animations.
  */
 export class SpriteAnimation {
   private texture: THREE.Texture;
@@ -18,6 +23,7 @@ export class SpriteAnimation {
   private current: AnimationClip | null = null;
   private timer = 0;
   private frame = 0;
+  private playbackDirection = 1;
   private cols: number;
   private rows: number;
 
@@ -43,6 +49,7 @@ export class SpriteAnimation {
     this.current = clip;
     this.timer = 0;
     this.frame = 0;
+    this.playbackDirection = 1;
     this.updateFrame();
   }
 
@@ -54,13 +61,23 @@ export class SpriteAnimation {
 
     if (this.timer >= duration) {
       this.timer -= duration;
-      this.frame++;
+      this.frame += this.playbackDirection;
 
-      if (this.frame >= this.current.frames) {
-        if (this.current.loop) {
-          this.frame = 0;
-        } else {
+      if (this.current.direction === 'pingpong') {
+        if (this.frame >= this.current.frames - 1) {
           this.frame = this.current.frames - 1;
+          this.playbackDirection = -1;
+        } else if (this.frame <= 0) {
+          this.frame = 0;
+          this.playbackDirection = 1;
+        }
+      } else {
+        if (this.frame >= this.current.frames) {
+          if (this.current.loop) {
+            this.frame = 0;
+          } else {
+            this.frame = this.current.frames - 1;
+          }
         }
       }
 

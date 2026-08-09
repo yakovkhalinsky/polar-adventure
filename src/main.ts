@@ -22,6 +22,10 @@ async function main(): Promise<void> {
       iceberg,
       tree,
       snowMound,
+      penguin,
+      fish,
+      igloo,
+      sign,
     ] = await Promise.all([
       loadTexture('assets/characters/polar-bear.png'),
       loadTexture('assets/tiles/snow.png'),
@@ -32,12 +36,16 @@ async function main(): Promise<void> {
       loadTexture('assets/objects/iceberg.png'),
       loadTexture('assets/objects/tree.png'),
       loadTexture('assets/objects/snow-mound.png'),
+      loadTexture('assets/objects/penguin.png'),
+      loadTexture('assets/objects/fish.png'),
+      loadTexture('assets/objects/igloo.png'),
+      loadTexture('assets/objects/sign.png'),
     ]);
 
     const game = new PlayScreen({
       polarBear,
       tiles: { snow, ice, iceCracks, water },
-      objects: { rock, iceberg, tree, snowMound },
+      objects: { rock, iceberg, tree, snowMound, penguin, fish, igloo, sign },
     });
 
     game.start();

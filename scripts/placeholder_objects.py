@@ -92,12 +92,74 @@ def make_snow_mound():
     save_object("snow-mound", img)
 
 
+def make_penguin():
+    img = Image.new("RGBA", (48, 64), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    # Body.
+    draw.ellipse([8, 12, 40, 56], fill="#1a1a2e")
+    # White belly.
+    draw.ellipse([16, 18, 32, 48], fill="#ffffff")
+    # Beak.
+    draw.polygon([(20, 20), (28, 20), (24, 28)], fill="#f2a93b")
+    # Eye.
+    draw.ellipse([21, 14, 25, 18], fill="#ffffff")
+    draw.ellipse([22, 15, 24, 17], fill="#000000")
+    # Feet.
+    draw.ellipse([12, 54, 24, 62], fill="#f2a93b")
+    draw.ellipse([26, 54, 38, 62], fill="#f2a93b")
+    # Flippers.
+    draw.polygon([(4, 28), (10, 22), (10, 42)], fill="#1a1a2e")
+    draw.polygon([(44, 28), (38, 22), (38, 42)], fill="#1a1a2e")
+    save_object("penguin", img)
+
+
+def make_fish():
+    img = Image.new("RGBA", (36, 24), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    draw.ellipse([4, 4, 28, 20], fill="#b8e0ff")
+    draw.polygon([(26, 12), (36, 4), (36, 20)], fill="#b8e0ff")
+    draw.ellipse([14, 8, 18, 12], fill="#0b1d2e")
+    save_object("fish", img)
+
+
+def make_igloo():
+    img = Image.new("RGBA", (64, 48), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    # Dome.
+    draw.arc([2, 12, 62, 48], 180, 0, fill="#e8f4ff", width=10)
+    draw.ellipse([2, 12, 62, 46], fill="#d0e6f5")
+    # Doorway.
+    draw.arc([22, 26, 42, 48], 180, 0, fill="#0b1d2e", width=2)
+    draw.rectangle([24, 36, 40, 48], fill="#1a3045")
+    # Ice blocks lines.
+    draw.line([(6, 30), (58, 30)], fill="#b8d4e8", width=1)
+    draw.line([(10, 18), (54, 18)], fill="#b8d4e8", width=1)
+    save_object("igloo", img)
+
+
+def make_sign():
+    img = Image.new("RGBA", (32, 48), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    # Post.
+    draw.rectangle([12, 24, 20, 48], fill="#5c4033")
+    # Board.
+    draw.rectangle([2, 4, 30, 28], fill="#7a5230")
+    draw.rectangle([6, 8, 26, 24], fill="#603e24")
+    # Snow cap.
+    draw.polygon([(2, 4), (16, 0), (30, 4)], fill="#ffffff")
+    save_object("sign", img)
+
+
 def main():
     make_water()
     make_rock()
     make_iceberg()
     make_tree()
     make_snow_mound()
+    make_penguin()
+    make_fish()
+    make_igloo()
+    make_sign()
 
 
 if __name__ == "__main__":

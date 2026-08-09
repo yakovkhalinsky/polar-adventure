@@ -58,12 +58,37 @@
         backdrop-filter: blur(4px);
         font-size: 0.9rem;
       }
+
+      #ui-layer .dialogue-box {
+        pointer-events: auto;
+        align-self: center;
+        max-width: min(540px, 90%);
+        background: rgba(11, 29, 46, 0.92);
+        border: 1px solid rgba(166, 210, 255, 0.35);
+        border-radius: 0.75rem;
+        padding: 1rem 1.25rem;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+        backdrop-filter: blur(6px);
+      }
+
+      #ui-layer .dialogue-text {
+        margin: 0 0 0.75rem;
+        font-size: 1.05rem;
+        line-height: 1.45;
+      }
+
+      #ui-layer .dialogue-hint {
+        display: block;
+        color: #a6d2ff;
+        font-size: 0.8rem;
+        text-align: right;
+      }
     </style>
   </head>
   <body>
     <div id="game-container"></div>
     <div id="ui-layer">
-      <div class="hud">Use Arrow Keys or WASD to move the polar bear.</div>
+      <div class="hud" id="score-hud">Use Arrow Keys or WASD to move. E to talk.</div>
       <div class="hud">Polar Adventures v0.1.0</div>
     </div>
     <script type="module" src="./src/main.ts"></script>

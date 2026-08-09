@@ -3,6 +3,7 @@ import { IsometricSprite } from '../engine/IsometricSprite.ts';
 import { SpriteAnimation } from '../engine/SpriteAnimation.ts';
 import { TileMap } from '../engine/TileMap.ts';
 import { WorldObject } from '../engine/WorldObject.ts';
+import { DecalSystem } from '../engine/DecalSystem.ts';
 
 export type Direction = 'up' | 'down' | 'left' | 'right';
 
@@ -36,6 +37,9 @@ export class PolarBear {
 
   private tileMap: TileMap | null = null;
   private objects: WorldObject[] = [];
+  private decalSystem: DecalSystem | null = null;
+  private footstepAccumulator = 0;
+  private footstepSide = -1;
 
   constructor(texture: THREE.Texture) {
     const material = new THREE.SpriteMaterial({
@@ -58,7 +62,7 @@ export class PolarBear {
         { name: 'swim', row: 4, frames: 4, fps: 6, loop: true },
         { name: 'attack', row: 5, frames: 4, fps: 10, loop: false },
         { name: 'push', row: 6, frames: 4, fps: 8, loop: true },
-        { name: 'idle-breathe', row: 7, frames: 4, fps: 4, loop: true },
+        { name: 'idle-breathe', row: 7, frames: 4, fps: 4, loop: true, direction: 'pingpong' },
       ],
       4,
       8
@@ -82,6 +86,10 @@ export class PolarBear {
   setCollisionContext(tileMap: TileMap, objects: WorldObject[]): void {
     this.tileMap = tileMap;
     this.objects = objects;
+  }
+
+  setDecalSystem(system: DecalSystem): void {
+    this.decalSystem = system;
   }
 
   setPosition(x: number, y: number): void {
@@ -178,8 +186,30 @@ export class PolarBear {
       this.pushTimer = 0.25;
     }
 
+    const wasInAir = this.isJumping;
+
     if (!this.isJumping) {
       this.groundY = this.pos.y;
+    }
+
+    // Spawn landing puff when returning to ground.
+    if (wasInAir && !this.isJumping) {
+      this.decalSystem?.spawnLandingPuff(this.pos.x, this.groundY);
+    }
+
+    // Footprints while walking, and dust on cracked ice.
+    if (moving && !this.isJumping) {
+      const dist = Math.hypot(this.vel.x, this.vel.y) * seconds;
+      this.footstepAccumulator += dist;
+      if (this.footstepAccumulator >= 35) {
+        this.footstepAccumulator -= 35;
+        this.spawnFootprint();
+      }
+
+      const tile = this.tileMap?.getTileAt(this.pos.x, this.pos.y);
+      if (tile?.type === 'iceCracks' && Math.random() < 0.08) {
+        this.decalSystem?.spawnDust(this.pos.x, this.pos.y, 2);
+      }
     }
 
     // Animation state priority: attack > push > walk > idle.
@@ -236,6 +266,29 @@ export class PolarBear {
     this.isJumping = false;
     this.pos.y = this.groundY;
     this.vel.y = 0;
+  }
+
+  private spawnFootprint(): void {
+    if (!this.decalSystem) return;
+
+    const angleMap: Record<Direction, number> = {
+      right: 0,
+      up: Math.PI / 2,
+      left: Math.PI,
+      down: -Math.PI / 2,
+    };
+
+    this.footstepSide *= -1;
+    const side = this.footstepSide;
+    let offsetX = 0;
+    let offsetY = 0;
+    if (this.facing === 'left' || this.facing === 'right') {
+      offsetY = side * 10;
+    } else {
+      offsetX = side * 10;
+    }
+
+    this.decalSystem.spawnFootprint(this.pos.x + offsetX, this.pos.y + offsetY, angleMap[this.facing]);
   }
 
   private updateShadow(): void {
