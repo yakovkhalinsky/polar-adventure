@@ -1,7 +1,6 @@
 import * as THREE from 'three';
-import { IsometricScene } from '../engine/IsometricScene.ts';
-import { TileMap, TileType } from '../engine/TileMap.ts';
-import { DepthSorter } from '../engine/DepthSorter.ts';
+import { SideScrollScene } from '../engine/SideScrollScene.ts';
+import { PlatformTileMap, TileType } from '../engine/PlatformTileMap.ts';
 import { CameraController } from '../engine/CameraController.ts';
 import { WorldObject } from '../engine/WorldObject.ts';
 import { NPC, Collectible, Interactable } from '../engine/Interactables.ts';
@@ -12,20 +11,20 @@ import { DecalSystem } from '../engine/DecalSystem.ts';
 
 const TILE_WIDTH = 64;
 const TILE_HEIGHT = 32;
-const GRID_SIZE = 24;
+const GROUND_Y = 240;
+const LEVEL_WIDTH = 2600;
 
 /**
- * The main gameplay screen. Sets up an isometric tile grid, spawns the polar
- * bear, places obstacles and decorations, drives the render loop, and keeps the
- * camera smoothly following the player.
+ * The main gameplay screen. Sets up a horizontal side-scrolling level,
+ * spawns the polar bear, places obstacles and decorations, drives the
+ * render loop, and keeps the camera smoothly following the player.
  */
 export class PlayScreen {
-  private scene: IsometricScene;
+  private scene: SideScrollScene;
   private worldRoot: THREE.Object3D;
-  private tileMap: TileMap | null = null;
+  private tileMap: PlatformTileMap | null = null;
   private player: PolarBear | null = null;
   private camera: CameraController | null = null;
-  private sorter: DepthSorter;
   private keys = new Set<string>();
   private running = true;
   private objects: WorldObject[] = [];
@@ -46,18 +45,18 @@ export class PlayScreen {
 
   constructor(textures: PlayScreen['textures']) {
     this.textures = textures;
-    this.scene = new IsometricScene('game-container');
+    this.scene = new SideScrollScene('game-container');
     this.worldRoot = new THREE.Object3D();
     this.scene.scene.add(this.worldRoot);
-    this.sorter = new DepthSorter(this.worldRoot);
     this.dialogue = new DialogueBox();
     this.scoreHud = document.getElementById('score-hud') ?? document.createElement('div');
     this.updateScoreHud();
   }
 
   start(): void {
-    this.tileMap = new TileMap({
-      size: GRID_SIZE,
+    this.tileMap = new PlatformTileMap({
+      width: LEVEL_WIDTH,
+      groundY: GROUND_Y,
       tileWidth: TILE_WIDTH,
       tileHeight: TILE_HEIGHT,
       textures: this.textures.tiles,
@@ -66,7 +65,7 @@ export class PlayScreen {
 
     this.spawnObjects();
 
-    this.snow = new SnowSystem({ count: 500, areaWidth: 900, areaHeight: 700, windX: 0.5 });
+    this.snow = new SnowSystem({ count: 500, areaWidth: 1200, areaHeight: 800, windX: -0.3 });
     this.scene.scene.add(this.snow.points);
     this.snow.points.position.z = 120;
 
@@ -76,23 +75,20 @@ export class PlayScreen {
     this.worldRoot.add(this.player.character.sprite);
     this.worldRoot.add(this.player.shadow.sprite);
 
-    // Center player on the grid.
-    const { x, y } = this.tileMap.cartesianToIsometric(0, 0);
-    this.player.setPosition(x, y);
+    // Start on the ground at the left side.
+    this.player.setPosition(80, GROUND_Y);
     this.player.setCollisionContext(this.tileMap, this.objects);
     this.player.setDecalSystem(this.decals);
 
-    // Initial zoom to frame the grid, then a smooth follow camera.
-    this.fitCamera();
+    // Camera follows the player through the level.
     this.camera = new CameraController(
       this.worldRoot,
       this.scene.designWidth,
       this.scene.designHeight,
-      { bounds: this.tileMap.bounds }
+      { bounds: this.tileMap.bounds, deadzoneX: 64, deadzoneY: 9999, smoothness: 0.12 }
     );
-    this.camera.snapTo(x, y);
+    this.camera.snapTo(this.player.getPosition().x, this.player.getPosition().y);
 
-    // Input.
     window.addEventListener('keydown', this.handleKeyDown);
     window.addEventListener('keyup', this.handleKeyUp);
 
@@ -111,68 +107,44 @@ export class PlayScreen {
   private spawnObjects(): void {
     if (!this.tileMap) return;
 
-    const half = Math.floor(GRID_SIZE / 2);
     const rng = seededRng(42);
     const objectTypes = [
       { key: 'rock', width: 48, height: 40, radius: 18 },
-      { key: 'iceberg', width: 56, height: 72, radius: 20 },
       { key: 'tree', width: 48, height: 72, radius: 16 },
       { key: 'snowMound', width: 40, height: 24, radius: 12 },
+      { key: 'iceberg', width: 56, height: 72, radius: 20 },
     ];
 
-    // Spawn persistent NPCs, collectibles, and interactables at fixed tiles.
     this.spawnNPCs();
     this.spawnCollectibles(rng);
     this.spawnInteractables();
 
-    // Place a ring of water around the outer edges and scattered objects inside.
-    for (const tile of this.tileMap.tiles) {
-      // Skip the starting area around (0,0).
-      if (Math.abs(tile.col - half) <= 2 && Math.abs(tile.row - half) <= 2) {
-        continue;
-      }
+    // Scatter decorations across the level, avoiding the start area.
+    for (let x = 300; x < LEVEL_WIDTH - 120; x += 140 + Math.floor(rng() * 160)) {
+      if (rng() > 0.35) continue;
 
-      // Border water.
-      const distFromEdge = Math.min(
-        tile.col,
-        tile.row,
-        GRID_SIZE - 1 - tile.col,
-        GRID_SIZE - 1 - tile.row
-      );
-      if (distFromEdge <= 1) {
-        if (rng() > 0.3) {
-          tile.type = 'water';
-          tile.blocked = true;
-          // Swap texture.
-          (tile.sprite.sprite.material as THREE.SpriteMaterial).map = this.textures.tiles.water;
-        }
-        continue;
-      }
+      const type = objectTypes[Math.floor(rng() * objectTypes.length)];
+      const groundY = this.tileMap.groundHeightAt(x);
+      if (groundY === null) continue;
 
-      // Random decorations on snow/ice tiles.
-      if (tile.type === 'snow' || tile.type === 'ice') {
-        if (rng() < 0.04) {
-          const type = objectTypes[Math.floor(rng() * objectTypes.length)];
-          const obj = new WorldObject({
-            x: tile.x,
-            y: tile.y,
-            width: type.width,
-            height: type.height,
-            texture: this.textures.objects[type.key],
-            blocked: type.key !== 'snowMound',
-            blockRadius: type.radius,
-          });
-          this.objects.push(obj);
-          this.worldRoot.add(obj.sprite.sprite);
-        }
-      }
+      const obj = new WorldObject({
+        x,
+        y: groundY,
+        width: type.width,
+        height: type.height,
+        texture: this.textures.objects[type.key],
+        blocked: type.key !== 'snowMound',
+        blockRadius: type.radius,
+      });
+      this.objects.push(obj);
+      this.worldRoot.add(obj.sprite.sprite);
     }
   }
 
   private loop = (_time: number): void => {
     if (!this.running) return;
 
-    this.player?.update(16.67, this.keys); // fixed 60fps dt for stability
+    this.player?.update(16.67, this.keys);
 
     if (this.player) {
       const pos = this.player.getPosition();
@@ -190,19 +162,6 @@ export class PlayScreen {
     for (const item of this.collectibles) item.update(16.67);
     for (const obj of this.interactables) obj.update(16.67);
 
-    if (this.player && this.tileMap) {
-      this.sorter.sort([
-        ...this.tileMap.tiles.map((t) => t.sprite),
-        ...this.objects.map((o) => o.sprite),
-        ...this.npcs.map((n) => n.sprite),
-        ...this.collectibles.map((c) => c.sprite),
-        ...this.interactables.map((i) => i.sprite),
-        ...(this.decals?.sprites ?? []),
-        this.player.shadow,
-        this.player.character,
-      ]);
-    }
-
     this.scene.render();
     requestAnimationFrame(this.loop);
   };
@@ -216,7 +175,6 @@ export class PlayScreen {
   };
 
   private mapKey(e: KeyboardEvent, pressed: boolean): void {
-    // Dialogue consumes E and Space so the player does not jump/talk at the same time.
     if (this.dialogue.isOpen) {
       if (e.code === 'Space' || e.code === 'KeyE') {
         e.preventDefault();
@@ -236,11 +194,9 @@ export class PlayScreen {
       KeyA: 'left',
       ArrowRight: 'right',
       KeyD: 'right',
-      ArrowUp: 'up',
-      KeyW: 'up',
-      ArrowDown: 'down',
-      KeyS: 'down',
       Space: 'jump',
+      KeyW: 'jump',
+      ArrowUp: 'jump',
       KeyX: 'attack',
       ShiftLeft: 'attack',
       ShiftRight: 'attack',
@@ -249,8 +205,7 @@ export class PlayScreen {
     const action = map[e.code];
     if (!action) return;
 
-    // Prevent page scroll on arrow keys and space.
-    if (['left', 'right', 'up', 'down', 'jump'].includes(action)) {
+    if (['left', 'right', 'jump'].includes(action)) {
       e.preventDefault();
     }
 
@@ -264,9 +219,10 @@ export class PlayScreen {
   private spawnNPCs(): void {
     if (!this.tileMap) return;
 
+    const groundY = this.tileMap.groundHeightAt(620);
     const penguin = new NPC({
-      x: this.tileMap.grid[6][8].x,
-      y: this.tileMap.grid[6][8].y,
+      x: 620,
+      y: groundY ?? GROUND_Y,
       width: 48,
       height: 64,
       texture: this.textures.objects.penguin,
@@ -284,34 +240,33 @@ export class PlayScreen {
     if (!this.tileMap) return;
 
     let placed = 0;
-    for (const tile of this.tileMap.tiles) {
-      if (placed >= 6) break;
-      if (tile.type === 'water' || tile.blocked) continue;
-      // Skip start area and NPC zone.
-      if (Math.abs(tile.col - 12) <= 2 && Math.abs(tile.row - 12) <= 2) continue;
-      if (Math.abs(tile.col - 8) <= 2 && Math.abs(tile.row - 6) <= 2) continue;
-      if (rng() < 0.04) {
-        const fish = new Collectible({
-          x: tile.x,
-          y: tile.y,
-          width: 36,
-          height: 24,
-          texture: this.textures.objects.fish,
-          value: 1,
-        });
-        this.collectibles.push(fish);
-        this.worldRoot.add(fish.sprite.sprite);
-        placed++;
-      }
+    for (let x = 250; x < LEVEL_WIDTH - 100 && placed < 8; x += 220 + Math.floor(rng() * 180)) {
+      const groundY = this.tileMap.groundHeightAt(x);
+      if (groundY === null) continue;
+      // Skip the NPC zone.
+      if (Math.abs(x - 620) < 80) continue;
+
+      const fish = new Collectible({
+        x,
+        y: groundY + 48,
+        width: 36,
+        height: 24,
+        texture: this.textures.objects.fish,
+        value: 1,
+      });
+      this.collectibles.push(fish);
+      this.worldRoot.add(fish.sprite.sprite);
+      placed++;
     }
   }
 
   private spawnInteractables(): void {
     if (!this.tileMap) return;
 
+    const iglooGround = this.tileMap.groundHeightAt(LEVEL_WIDTH - 180);
     const igloo = new Interactable({
-      x: this.tileMap.grid[10][14].x,
-      y: this.tileMap.grid[10][14].y,
+      x: LEVEL_WIDTH - 180,
+      y: iglooGround ?? GROUND_Y,
       width: 64,
       height: 48,
       texture: this.textures.objects.igloo,
@@ -320,28 +275,17 @@ export class PlayScreen {
     this.interactables.push(igloo);
     this.worldRoot.add(igloo.sprite.sprite);
 
+    const signGround = this.tileMap.groundHeightAt(160);
     const sign = new Interactable({
-      x: this.tileMap.grid[14][6].x,
-      y: this.tileMap.grid[14][6].y,
+      x: 160,
+      y: signGround ?? GROUND_Y,
       width: 32,
       height: 48,
       texture: this.textures.objects.sign,
-      label: 'Welcome to Polar Adventures! Press Space to jump and E to talk.',
+      label: 'Welcome to Polar Adventures! Arrows/WASD to run, Space/W/Up to jump, E to talk.',
     });
     this.interactables.push(sign);
     this.worldRoot.add(sign.sprite.sprite);
-  }
-
-  private fitCamera(): void {
-    if (!this.tileMap) return;
-
-    const worldWidth = this.tileMap.bounds.max.x - this.tileMap.bounds.min.x;
-    const worldHeight = this.tileMap.bounds.max.y - this.tileMap.bounds.min.y;
-    const zoom = Math.min(
-      this.scene.designWidth / worldWidth,
-      this.scene.designHeight / worldHeight
-    ) * 0.85;
-    this.scene.setZoom(zoom);
   }
 
   private updateCollectibles(): void {
@@ -353,7 +297,7 @@ export class PlayScreen {
       if (item.collected) continue;
       const dx = pos.x - item.position.x;
       const dy = pos.y - item.position.y;
-      if (Math.sqrt(dx * dx + dy * dy) < 28) {
+      if (Math.sqrt(dx * dx + dy * dy) < 36) {
         this.score += item.collect();
         this.worldRoot.remove(item.sprite.sprite);
         this.updateScoreHud();
@@ -365,14 +309,13 @@ export class PlayScreen {
     if (!this.player || this.dialogue.isOpen) return;
     const pos = this.player.getPosition();
 
-    // Find the nearest NPC.
     let nearestNpc: NPC | null = null;
     let nearestNpcDist = Infinity;
     for (const npc of this.npcs) {
       const dx = pos.x - npc.position.x;
       const dy = pos.y - npc.position.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist < 55 && dist < nearestNpcDist) {
+      if (dist < 65 && dist < nearestNpcDist) {
         nearestNpc = npc;
         nearestNpcDist = dist;
       }
@@ -384,11 +327,10 @@ export class PlayScreen {
       return;
     }
 
-    // Otherwise check structures / signs.
     for (const obj of this.interactables) {
       const dx = pos.x - obj.position.x;
       const dy = pos.y - obj.position.y;
-      if (Math.sqrt(dx * dx + dy * dy) < 55) {
+      if (Math.sqrt(dx * dx + dy * dy) < 60) {
         this.dialogue.show(obj.label, obj.action);
         return;
       }
@@ -396,7 +338,7 @@ export class PlayScreen {
   }
 
   private updateScoreHud(): void {
-    this.scoreHud.textContent = `Fish: ${this.score}/6  |  Arrows/WASD move  |  Space jump  |  E talk`;
+    this.scoreHud.textContent = `Fish: ${this.score}/8  |  Arrows/WASD move  |  Space jump  |  E talk`;
   }
 }
 

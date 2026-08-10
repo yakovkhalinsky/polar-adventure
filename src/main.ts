@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { PlayScreen } from './screens/PlayScreen.ts';
 
 /**
- * Bootstrap the Three.js isometric game after textures have loaded.
+ * Bootstrap the Three.js side-scrolling game after textures have loaded.
  */
 function loadTexture(url: string): Promise<THREE.Texture> {
   return new Promise((resolve, reject) => {
@@ -17,7 +17,6 @@ async function main(): Promise<void> {
       snow,
       ice,
       iceCracks,
-      water,
       rock,
       iceberg,
       tree,
@@ -31,7 +30,6 @@ async function main(): Promise<void> {
       loadTexture('assets/tiles/snow.png'),
       loadTexture('assets/tiles/ice.png'),
       loadTexture('assets/tiles/ice-cracks.png'),
-      loadTexture('assets/tiles/water.png'),
       loadTexture('assets/objects/rock.png'),
       loadTexture('assets/objects/iceberg.png'),
       loadTexture('assets/objects/tree.png'),
@@ -44,7 +42,7 @@ async function main(): Promise<void> {
 
     const game = new PlayScreen({
       polarBear,
-      tiles: { snow, ice, iceCracks, water },
+      tiles: { snow, ice, iceCracks },
       objects: { rock, iceberg, tree, snowMound, penguin, fish, igloo, sign },
     });
 

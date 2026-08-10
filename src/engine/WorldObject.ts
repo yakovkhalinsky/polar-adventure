@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { IsometricSprite } from './IsometricSprite.ts';
+import { GameSprite } from './GameSprite.ts';
 
 export interface WorldObjectOptions {
   x: number;
@@ -14,12 +14,11 @@ export interface WorldObjectOptions {
 }
 
 /**
- * A generic billboard object placed in the isometric world: rocks, trees,
- * signs, NPCs, collectibles. Participates in depth sorting and can block
- * movement.
+ * A generic billboard object placed in the side-scrolling world: rocks,
+ * trees, signs, NPCs, collectibles. Can block movement.
  */
 export class WorldObject {
-  readonly sprite: IsometricSprite;
+  readonly sprite: GameSprite;
   readonly position: THREE.Vector3;
   readonly blocked: boolean;
   readonly blockRadius: number;
@@ -39,9 +38,8 @@ export class WorldObject {
       alphaTest: 0.5,
       depthWrite: false,
     });
-    this.sprite = new IsometricSprite(material, options.width, options.height);
+    this.sprite = new GameSprite(material, options.width, options.height);
     this.sprite.setPosition(options.x, options.y, options.z ?? 0.5);
-    this.sprite.sortMode = 'y';
   }
 
   /**

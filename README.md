@@ -1,10 +1,10 @@
 # Polar Adventures
 
-A polar / arctic / ice-themed isometric adventure game. You play as a polar bear exploring a frozen tile-based world.
+A polar / arctic / ice-themed 2D side-scrolling adventure game. You play as a polar bear running, jumping, and exploring a frozen platforming world.
 
 ## Tech stack
 
-- [melonJS](https://melonjs.org/) — 2D/2.5D game framework with native isometric Tiled map support
+- [Three.js](https://threejs.org/) — WebGL renderer and sprite system
 - [TypeScript](https://www.typescriptlang.org/) — typed JavaScript
 - [Vite](https://vitejs.dev/) — fast build tool and dev server
 
@@ -51,7 +51,10 @@ npm run preview
 
 ## Controls
 
-- **Arrow keys** or **WASD** — move the polar bear around the isometric ice grid.
+- **Arrow keys** or **A / D** — run left and right
+- **Space**, **W**, or **Arrow Up** — jump
+- **E** — talk to NPCs and read signs
+- **X** or **Shift** — attack
 
 ## Deployment
 
@@ -76,16 +79,24 @@ To enable Pages deployment:
 ├── .github/workflows/      # CI/CD workflows
 │   └── deploy.yml          # GitHub Pages deploy workflow
 └── src/
-    ├── main.ts             # melonJS application bootstrap
+    ├── main.ts             # Asset loading and game bootstrap
     ├── screens/
-    │   └── PlayScreen.ts   # Initial isometric ice screen
-    └── entities/
-        └── PolarBearEntity.ts  # Polar bear player entity
+    │   └── PlayScreen.ts   # Main side-scrolling gameplay screen
+    ├── entities/
+    │   └── PolarBear.ts     # Player-controlled polar bear
+    ├── engine/
+    │   ├── SideScrollScene.ts   # Three.js renderer and camera
+    │   ├── GameSprite.ts        # Billboard sprite helper
+    │   ├── PlatformTileMap.ts   # Horizontal level tiles
+    │   ├── SpriteAnimation.ts # Spritesheet animation
+    │   ├── SnowSystem.ts        # Atmospheric snowfall
+    │   ├── DecalSystem.ts       # Footprints and dust effects
+    │   ├── CameraController.ts  # Smooth follow camera
+    │   ├── WorldObject.ts       # Generic placed objects
+    │   └── Interactables.ts     # NPCs, collectibles, signs
+    └── ui/
+        └── DialogueBox.ts   # In-game dialogue box
 ```
-
-## Notes on the framework choice
-
-melonJS was selected because it is purpose-built for browser-based 2D/2.5D games, has first-class isometric Tiled map support, first-class TypeScript support, and produces a plain static bundle that GitHub Pages can serve without extra headers or server configuration. Its built-in animation system, camera, input, physics, scene manager, and asset pipeline make it a strong fit for an adventure game with movement, dialogue, inventory, and quests.
 
 ## License
 

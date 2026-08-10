@@ -1,7 +1,7 @@
 {
   "name": "polar-adventures",
   "version": "0.1.0",
-  "description": "Polar/arctic ice-themed isometric adventure game built with Three.js, TypeScript, and Vite.",
+  "description": "Polar/arctic ice-themed 2D side-scrolling adventure game built with Three.js, TypeScript, and Vite.",
   "type": "module",
   "scripts": {
     "dev": "vite",

@@ -1,8 +1,8 @@
 import * as THREE from 'three';
-import { IsometricSprite } from './IsometricSprite.ts';
+import { GameSprite } from './GameSprite.ts';
 
 export interface Decal {
-  sprite: IsometricSprite;
+  sprite: GameSprite;
   life: number;
   maxLife: number;
   grow: boolean;
@@ -17,7 +17,7 @@ export interface Decal {
  * behind the player, dust puffs on cracked ice, and landing bursts.
  */
 export class DecalSystem {
-  get sprites(): IsometricSprite[] {
+  get sprites(): GameSprite[] {
     return this.decals.map((d) => d.sprite);
   }
   private decals: Decal[] = [];
@@ -38,9 +38,8 @@ export class DecalSystem {
       opacity: 0.5,
       depthWrite: false,
     });
-    const sprite = new IsometricSprite(material, 20, 14);
+    const sprite = new GameSprite(material, 20, 14);
     sprite.setPosition(x, y, 0.05);
-    sprite.sortMode = 'y';
     sprite.sprite.rotation.z = direction;
 
     this.parent.add(sprite.sprite);
@@ -65,11 +64,10 @@ export class DecalSystem {
         depthWrite: false,
       });
       const size = 12 + Math.random() * 16;
-      const sprite = new IsometricSprite(material, size, size);
+      const sprite = new GameSprite(material, size, size);
       const angle = Math.random() * Math.PI * 2;
       const dist = Math.random() * 12;
       sprite.setPosition(x + Math.cos(angle) * dist, y + Math.sin(angle) * dist, 0.2);
-      sprite.sortMode = 'y';
 
       this.parent.add(sprite.sprite);
       this.decals.push({

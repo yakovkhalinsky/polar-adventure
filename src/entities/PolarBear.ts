@@ -1,45 +1,41 @@
 import * as THREE from 'three';
-import { IsometricSprite } from '../engine/IsometricSprite.ts';
+import { GameSprite } from '../engine/GameSprite.ts';
 import { SpriteAnimation } from '../engine/SpriteAnimation.ts';
-import { TileMap } from '../engine/TileMap.ts';
+import { PlatformTileMap } from '../engine/PlatformTileMap.ts';
 import { WorldObject } from '../engine/WorldObject.ts';
 import { DecalSystem } from '../engine/DecalSystem.ts';
 
-export type Direction = 'up' | 'down' | 'left' | 'right';
+export type Facing = 'left' | 'right';
 
-const WALK_SPEED = 160;
-const JUMP_VELOCITY = -260;
-const GRAVITY_Y = 800;
+const WALK_SPEED = 220;
+const JUMP_VELOCITY = -520;
+const GRAVITY = 1600;
+const FALL_GRAVITY = 1800;
 
 const FRAME_SIZE = 128;
 const SPRITE_SCALE = FRAME_SIZE * 1.25; // 160 world units.
 
 /**
- * Player-controlled polar bear with an extended animation set:
- * 4-direction walk, swim, attack, push, and idle-breathe.
- * Respects tile and object collision.
+ * Player-controlled polar bear for a 2D side-scrolling platformer.
+ * Moves left/right, jumps on solid tiles, and respects object collision.
  */
 export class PolarBear {
-  readonly character: IsometricSprite;
-  readonly shadow: IsometricSprite;
+  readonly character: GameSprite;
+  readonly shadow: GameSprite;
   private animation: SpriteAnimation;
 
-  private facing: Direction = 'down';
+  private facing: Facing = 'right';
   private isJumping = false;
-  private isPushing = false;
-  private pushTimer = 0;
   private isAttacking = false;
   private attackTimer = 0;
-  private jumpTime = 0;
-  private groundY = 0;
+  private coyoteTimer = 0;
   private pos = new THREE.Vector3();
   private vel = new THREE.Vector3();
 
-  private tileMap: TileMap | null = null;
+  private tileMap: PlatformTileMap | null = null;
   private objects: WorldObject[] = [];
   private decalSystem: DecalSystem | null = null;
   private footstepAccumulator = 0;
-  private footstepSide = -1;
 
   constructor(texture: THREE.Texture) {
     const material = new THREE.SpriteMaterial({
@@ -48,29 +44,27 @@ export class PolarBear {
       alphaTest: 0.5,
     });
 
-    this.character = new IsometricSprite(material, SPRITE_SCALE, SPRITE_SCALE);
-    this.character.sortMode = 'y';
+    this.character = new GameSprite(material, SPRITE_SCALE, SPRITE_SCALE);
     this.character.setPosition(0, 0, 0.5);
 
+    // Current polar-bear.png is a 4x4 sheet:
+    // row 0 = walk-up, row 1 = walk-right, row 2 = walk-down, row 3 = walk-left.
+    // For the side-scrolling pivot we only need left/right rows plus an idle pose.
     this.animation = new SpriteAnimation(
       texture,
       [
-        { name: 'walk-up', row: 0, frames: 4, fps: 8, loop: true },
-        { name: 'walk-right', row: 1, frames: 4, fps: 8, loop: true },
-        { name: 'walk-down', row: 2, frames: 4, fps: 8, loop: true },
-        { name: 'walk-left', row: 3, frames: 4, fps: 8, loop: true },
-        { name: 'swim', row: 2, frames: 4, fps: 6, loop: true },
+        { name: 'idle', row: 2, frames: 4, fps: 4, loop: true, direction: 'pingpong' },
+        { name: 'walk-right', row: 1, frames: 4, fps: 10, loop: true },
+        { name: 'walk-left', row: 3, frames: 4, fps: 10, loop: true },
+        { name: 'jump', row: 1, frames: 1, fps: 1, loop: true },
         { name: 'attack', row: 2, frames: 4, fps: 10, loop: false },
-        { name: 'push', row: 2, frames: 4, fps: 8, loop: true },
-        { name: 'idle-breathe', row: 2, frames: 4, fps: 4, loop: true, direction: 'pingpong' },
       ],
       4,
       4
     );
 
-    this.animation.play('idle-breathe');
+    this.animation.play('idle');
 
-    // Ground shadow using a tiny generated texture.
     const shadowTexture = this.createShadowTexture();
     const shadowMaterial = new THREE.SpriteMaterial({
       map: shadowTexture,
@@ -78,12 +72,11 @@ export class PolarBear {
       opacity: 0.35,
       depthWrite: false,
     });
-    this.shadow = new IsometricSprite(shadowMaterial, 72, 28);
+    this.shadow = new GameSprite(shadowMaterial, 72, 28);
     this.shadow.setPosition(0, 0, 0.1);
-    this.shadow.sortMode = 'y';
   }
 
-  setCollisionContext(tileMap: TileMap, objects: WorldObject[]): void {
+  setCollisionContext(tileMap: PlatformTileMap, objects: WorldObject[]): void {
     this.tileMap = tileMap;
     this.objects = objects;
   }
@@ -94,9 +87,8 @@ export class PolarBear {
 
   setPosition(x: number, y: number): void {
     this.pos.set(x, y, 0);
-    this.groundY = y;
     this.character.setPosition(x, y, 0.5);
-    this.shadow.setPosition(x, this.groundY, 0.1);
+    this.shadow.setPosition(x, y, 0.1);
   }
 
   getPosition(): THREE.Vector3 {
@@ -106,7 +98,6 @@ export class PolarBear {
   update(dt: number, keys: Set<string>): void {
     const seconds = dt / 1000;
     let vx = 0;
-    let vy = 0;
     let moving = false;
 
     if (keys.has('left')) {
@@ -119,26 +110,63 @@ export class PolarBear {
       moving = true;
     }
 
-    if (keys.has('up')) {
-      vy = -WALK_SPEED;
-      this.facing = 'up';
-      moving = true;
-    } else if (keys.has('down')) {
-      vy = WALK_SPEED;
-      this.facing = 'down';
-      moving = true;
-    }
-
     if (keys.has('jump') && !this.isJumping) {
-      this.startJump();
+      if (this.coyoteTimer > 0 || this.onGround()) {
+        this.startJump();
+      }
     }
 
     if (keys.has('attack') && !this.isAttacking) {
       this.startAttack();
     }
 
-    if (this.isJumping) {
-      this.updateJump(seconds);
+    // Apply horizontal velocity and resolve wall collisions.
+    this.vel.x = vx;
+    const nextX = this.pos.x + this.vel.x * seconds;
+    if (!this.isBlocked(nextX, this.pos.y)) {
+      this.pos.x = nextX;
+    } else {
+      this.vel.x = 0;
+    }
+
+    // Apply gravity and vertical movement.
+    const gravity = this.vel.y > 0 ? FALL_GRAVITY : GRAVITY;
+    this.vel.y += gravity * seconds;
+    const nextY = this.pos.y + this.vel.y * seconds;
+
+    if (this.vel.y > 0 || this.vel.y < 0) {
+      // Moving up or down: check for ceilings/floors.
+      if (!this.isBlocked(this.pos.x, nextY)) {
+        this.pos.y = nextY;
+      } else {
+        // Hit something. If falling, snap to ground.
+        if (this.vel.y > 0) {
+          const ground = this.tileMap?.groundHeightAt(this.pos.x) ?? null;
+          if (ground != null && this.pos.y <= ground + 1) {
+            this.land(ground);
+          } else {
+            this.vel.y = 0;
+          }
+        } else {
+          // Bonked head on ceiling.
+          this.vel.y = 0;
+        }
+      }
+    }
+
+    // Make sure we still land when gravity settles exactly on a surface.
+    if (!this.isJumping && this.vel.y >= 0) {
+      const ground = this.tileMap?.groundHeightAt(this.pos.x) ?? null;
+      if (ground != null && this.pos.y >= ground - 1 && this.pos.y <= ground + 1) {
+        this.land(ground);
+      }
+    }
+
+    // Track coyote time for forgiving jumps.
+    if (this.onGround()) {
+      this.coyoteTimer = 0.08;
+    } else {
+      this.coyoteTimer = Math.max(0, this.coyoteTimer - seconds);
     }
 
     // Decrement one-shot timers.
@@ -149,89 +177,54 @@ export class PolarBear {
       }
     }
 
-    if (this.isPushing) {
-      this.pushTimer -= seconds;
-      if (this.pushTimer <= 0) {
-        this.isPushing = false;
-      }
-    }
-
-    // Try to move; collision prevents entering blocked tiles/objects.
-    this.vel.x = vx;
-    this.vel.y = this.isJumping ? this.vel.y : vy;
-
-    const nextX = this.pos.x + this.vel.x * seconds;
-    const nextY = this.pos.y + this.vel.y * seconds;
-
-    let movedX = false;
-    let movedY = false;
-
-    if (!this.isBlocked(nextX, this.pos.y)) {
-      this.pos.x = nextX;
-      movedX = true;
-    } else {
-      this.vel.x = 0;
-    }
-
-    if (!this.isBlocked(this.pos.x, nextY)) {
-      this.pos.y = nextY;
-      movedY = true;
-    } else {
-      this.vel.y = 0;
-    }
-
-    // If the player tried to move but got blocked, show a push animation.
-    if (moving && !this.isJumping && !this.isAttacking && (!movedX || !movedY)) {
-      this.isPushing = true;
-      this.pushTimer = 0.25;
-    }
-
-    const wasInAir = this.isJumping;
-
-    if (!this.isJumping) {
-      this.groundY = this.pos.y;
-    }
-
-    // Spawn landing puff when returning to ground.
-    if (wasInAir && !this.isJumping) {
-      this.decalSystem?.spawnLandingPuff(this.pos.x, this.groundY);
-    }
-
-    // Footprints while walking, and dust on cracked ice.
+    // Footprints while walking on ground.
     if (moving && !this.isJumping) {
-      const dist = Math.hypot(this.vel.x, this.vel.y) * seconds;
+      const dist = Math.abs(this.vel.x) * seconds;
       this.footstepAccumulator += dist;
-      if (this.footstepAccumulator >= 35) {
-        this.footstepAccumulator -= 35;
-        this.spawnFootprint();
+      if (this.footstepAccumulator >= 45) {
+        this.footstepAccumulator -= 45;
+        this.decalSystem?.spawnFootprint(this.pos.x, this.pos.y, this.facing === 'right' ? 0 : Math.PI);
       }
 
-      const tile = this.tileMap?.getTileAt(this.pos.x, this.pos.y);
-      if (tile?.type === 'iceCracks' && Math.random() < 0.08) {
+      const tile = this.tileMap?.tiles.find((t) => {
+        const left = t.x - t.width / 2;
+        const right = t.x + t.width / 2;
+        return this.pos.x >= left && this.pos.x <= right && Math.abs(t.y - this.pos.y) < 2;
+      });
+      if (tile?.type === 'iceCracks' && Math.random() < 0.06) {
         this.decalSystem?.spawnDust(this.pos.x, this.pos.y, 2);
       }
     }
 
-    // Animation state priority: attack > push > walk > idle.
+    // Animation state priority: attack > jump > walk > idle.
     if (this.isAttacking) {
       this.animation.play('attack');
-    } else if (this.isPushing) {
-      this.animation.play('push');
-    } else if (moving && !this.isJumping) {
+    } else if (this.isJumping) {
+      this.animation.play('jump');
+    } else if (moving) {
       this.animation.play(`walk-${this.facing}`);
-    } else if (!this.isJumping) {
-      this.animation.play('idle-breathe');
+    } else {
+      this.animation.play('idle');
     }
 
     this.animation.update(dt);
 
-    // Character floats upward during jump (z is screen height).
-    this.character.setPosition(this.pos.x, this.groundY, 0.5 + (this.groundY - this.pos.y));
+    // Visual flip so left/right rows face the correct way even if the sheet
+    // orientation is inconsistent.
+    this.character.flipX(this.facing === 'left');
+
+    this.character.setPosition(this.pos.x, this.pos.y, 0.5);
     this.updateShadow();
   }
 
+  private onGround(): boolean {
+    const ground = this.tileMap?.groundHeightAt(this.pos.x);
+    if (ground === null || ground === undefined) return false;
+    return Math.abs(this.pos.y - ground) <= 1;
+  }
+
   private isBlocked(x: number, y: number): boolean {
-    if (this.tileMap && this.tileMap.isBlocked(x, y)) {
+    if (this.tileMap?.isSolidAt(x, y)) {
       return true;
     }
     for (const obj of this.objects) {
@@ -244,7 +237,6 @@ export class PolarBear {
 
   private startJump(): void {
     this.isJumping = true;
-    this.jumpTime = 0;
     this.vel.y = JUMP_VELOCITY;
   }
 
@@ -253,48 +245,17 @@ export class PolarBear {
     this.attackTimer = 0.4;
   }
 
-  private updateJump(dt: number): void {
-    this.jumpTime += dt;
-    this.vel.y += GRAVITY_Y * dt;
-
-    if (this.vel.y > 0 && this.pos.y >= this.groundY) {
-      this.land();
-    }
-  }
-
-  private land(): void {
+  private land(groundY: number): void {
     this.isJumping = false;
-    this.pos.y = this.groundY;
+    this.pos.y = groundY;
     this.vel.y = 0;
   }
 
-  private spawnFootprint(): void {
-    if (!this.decalSystem) return;
-
-    const angleMap: Record<Direction, number> = {
-      right: 0,
-      up: Math.PI / 2,
-      left: Math.PI,
-      down: -Math.PI / 2,
-    };
-
-    this.footstepSide *= -1;
-    const side = this.footstepSide;
-    let offsetX = 0;
-    let offsetY = 0;
-    if (this.facing === 'left' || this.facing === 'right') {
-      offsetY = side * 10;
-    } else {
-      offsetX = side * 10;
-    }
-
-    this.decalSystem.spawnFootprint(this.pos.x + offsetX, this.pos.y + offsetY, angleMap[this.facing]);
-  }
-
   private updateShadow(): void {
-    const height = Math.max(0, this.groundY - this.pos.y);
-    const scale = Math.max(0.4, Math.min(1, 1 - height / 120));
-    this.shadow.setPosition(this.pos.x, this.groundY, 0.1);
+    const ground = this.tileMap?.groundHeightAt(this.pos.x);
+    const height = ground !== null && ground !== undefined ? Math.max(0, this.pos.y - ground) : 0;
+    const scale = Math.max(0.4, Math.min(1, 1 - height / 160));
+    this.shadow.setPosition(this.pos.x, this.pos.y, 0.1);
     this.shadow.setSize(72 * scale, 28 * scale);
     this.shadow.setOpacity(0.35 * scale);
   }

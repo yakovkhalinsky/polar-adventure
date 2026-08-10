@@ -22,7 +22,6 @@ export class NPC extends WorldObject {
     super({ ...options, blocked: false });
     this.name = options.name;
     this.lines = options.lines;
-    this.sprite.sortMode = 'y';
     this.baseY = options.y;
 
     // Default 4-frame idle row at the bottom of the texture if not specified.
@@ -63,7 +62,6 @@ export class Collectible extends WorldObject {
   constructor(options: CollectibleOptions) {
     super({ ...options, blocked: false });
     this.value = options.value ?? 1;
-    this.sprite.sortMode = 'y';
     this.baseY = options.y;
   }
 
@@ -99,7 +97,6 @@ export class Interactable extends WorldObject {
     super({ ...options, blocked: true, blockRadius: Math.max(options.width, options.height) * 0.3 });
     this.label = options.label;
     this.action = options.action;
-    this.sprite.sortMode = 'y';
     this.baseY = options.y;
   }
 
